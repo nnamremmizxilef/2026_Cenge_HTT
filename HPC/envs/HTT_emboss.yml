@@ -1,0 +1,9 @@
+name: HTT_emboss
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - emboss
+  - libiconv
+prefix: /home/zimmermf/miniconda3/envs/HTT_emboss

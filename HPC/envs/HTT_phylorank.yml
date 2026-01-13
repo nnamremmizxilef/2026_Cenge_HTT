@@ -1,0 +1,8 @@
+name: HTT_phylorank
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - phylorank=0.1.12
+prefix: /home/zimmermf/miniconda3/envs/HTT_phylorank

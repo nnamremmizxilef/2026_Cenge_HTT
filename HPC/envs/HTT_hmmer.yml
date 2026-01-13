@@ -1,0 +1,8 @@
+name: HTT_hmmer
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - hmmer
+prefix: /home/zimmermf/miniconda3/envs/HTT_hmmer

@@ -1,0 +1,8 @@
+name: HTT_trimal
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - trimal=1.4.1
+prefix: /home/zimmermf/miniconda3/envs/HTT_trimal

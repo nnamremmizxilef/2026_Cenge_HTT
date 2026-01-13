@@ -1,0 +1,9 @@
+name: HTT_biopython
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - biopython
+  - python=3.11
+prefix: /home/zimmermf/miniconda3/envs/HTT_biopython

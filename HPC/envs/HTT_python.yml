@@ -1,0 +1,12 @@
+name: HTT_python
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - python-igraph
+  - leidenalg
+  - pandas
+  - mummer4
+prefix: /home/zimmermf/miniconda3/envs/HTT_python

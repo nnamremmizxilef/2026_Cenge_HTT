@@ -1,0 +1,46 @@
+# OS / editor
+.DS_Store
+.Rhistory
+.RData
+.Rproj.user/
+*.swp
+
+# R outputs
+R/results/**
+R/data/**
+
+# HPC outputs
+HPC/logs/**
+HPC/results/**
+HPC/data/**
+HPC/databases/**
+
+# Large bioinformatics files
+*.fa
+*.fasta
+*.fna
+*.fastq
+*.fq
+*.bam
+*.sam
+*.cram
+*.vcf
+*.bcf
+*.gff
+*.gff3
+*.gtf
+*.bed
+*.nwk
+*.tree
+*.phy
+*.aln
+*.h5
+*.db
+*.idx
+*.tar
+*.tar.gz
+*.gz
+
+# Conda
+**/.conda/
+**/conda-bld/

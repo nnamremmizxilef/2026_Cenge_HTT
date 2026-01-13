@@ -1,0 +1,8 @@
+name: HTT_iqtree
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - iqtree=2.2.6
+prefix: /home/zimmermf/miniconda3/envs/HTT_iqtree

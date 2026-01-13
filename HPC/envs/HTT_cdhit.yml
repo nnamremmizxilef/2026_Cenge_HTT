@@ -1,0 +1,8 @@
+name: HTT_cdhit
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - cd-hit
+prefix: /home/zimmermf/miniconda3/envs/HTT_cdhit

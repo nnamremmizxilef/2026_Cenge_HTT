@@ -1,0 +1,9 @@
+name: HTT_mafft
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - mafft=7.505
+  - parallel
+prefix: /home/zimmermf/miniconda3/envs/HTT_mafft

@@ -1,0 +1,9 @@
+name: HTT_pal2nal
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - pal2nal=14.0
+  - parallel
+prefix: /home/zimmermf/miniconda3/envs/HTT_pal2nal

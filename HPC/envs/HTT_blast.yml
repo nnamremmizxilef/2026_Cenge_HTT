@@ -1,0 +1,9 @@
+name: HTT_blast
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - blast
+  - zstd
+prefix: /home/zimmermf/miniconda3/envs/HTT_blast

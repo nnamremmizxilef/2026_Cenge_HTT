@@ -1,0 +1,8 @@
+name: HTT_famsa
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - famsa=2.2.2
+prefix: /home/zimmermf/miniconda3/envs/HTT_famsa

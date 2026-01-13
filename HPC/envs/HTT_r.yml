@@ -1,0 +1,15 @@
+name: HTT_r
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - bioconductor-ggtree
+  - bioconductor-treeio
+  - r-ape
+  - r-base=4.4.3
+  - r-ggplot2
+  - zlib
+  - bioconductor-biostrings
+  - parallel
+prefix: /home/zimmermf/miniconda3/envs/HTT_r
