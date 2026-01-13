@@ -1,21 +1,9 @@
 #!/bin/bash
-#
-#SBATCH --job-name=flankid
-#SBATCH --qos hprio
-#SBATCH --account node
-#SBATCH --partition node
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=2-00:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
 
 set -euo pipefail
 
 ### paths
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 export ROOT
 
 GENOMES_DIR=${ROOT}/data/reference_genomes
@@ -580,7 +568,7 @@ Rscript --vanilla - << 'RS'
 library(ggplot2)
 library(dplyr)
 
-root <- Sys.getenv("ROOT", "/storage/zimmermf/HTT")
+root <- Sys.getenv("ROOT", "/path/to/HTT")
 infile <- file.path(root, "results/09_results_flankid/summary/flankid_results.tsv")
 outdir <- file.path(root, "results/09_results_flankid/summary")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)

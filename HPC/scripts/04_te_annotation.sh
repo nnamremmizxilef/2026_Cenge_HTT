@@ -1,22 +1,7 @@
 #!/bin/bash
-#
-#SBATCH --job-name=te_annotation
-#SBATCH --qos normal
-#SBATCH --account node
-#SBATCH --partition bigmem
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --array=0-22%11
-#SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=5-00:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
-
-
 
 ### define path(s)
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 GENOMES_DIR=${ROOT}/data/reference_genomes
 RESULTS=${ROOT}/results/04_results_te_annotation
 LOGS=${ROOT}/logs/04_logs_te_annotation

@@ -1,21 +1,7 @@
 #!/bin/bash
-#
-#SBATCH --job-name=div_times
-#SBATCH --qos hprio
-#SBATCH --account node
-#SBATCH --partition node
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=04:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
-
-
 
 ### define path(s)
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 TREE_RESULTS=${ROOT}/results/01_results_phylo_tree
 RESULTS=${ROOT}/results/02_results_div_times
 LOGS=${ROOT}/logs/02_logs_div_times

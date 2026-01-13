@@ -1,19 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=te_dedup_combine
-#SBATCH --qos hprio
-#SBATCH --account node
-#SBATCH --partition node
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=02:00:00
-#SBATCH --output=/storage/zimmermf/HTT/logs/05_logs_te_classification/dedup_combine_%j.out
-#SBATCH --error=/storage/zimmermf/HTT/logs/05_logs_te_classification/dedup_combine_%j.err
 
 set -euo pipefail
 
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 RESULTS=${ROOT}/results/05_results_te_classification
 FILTERED_DIR=${RESULTS}/filtered_tes
 DEDUP_DIR=${RESULTS}/deduplicated

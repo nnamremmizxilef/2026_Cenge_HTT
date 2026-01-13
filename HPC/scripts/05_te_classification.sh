@@ -1,20 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=te_classify
-#SBATCH --qos hprio
-#SBATCH --account node
-#SBATCH --partition node
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --array=0-22%11
-#SBATCH --cpus-per-task=4
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=5-00:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
 
 set -euo pipefail
 
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 TE_RESULTS=${ROOT}/results/04_results_te_annotation
 RESULTS=${ROOT}/results/05_results_te_classification
 LOGS=${ROOT}/logs/05_logs_te_classification

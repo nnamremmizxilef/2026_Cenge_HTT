@@ -1,23 +1,11 @@
 #!/bin/bash
-#
-#SBATCH --job-name=htt_candidates
-#SBATCH --qos normal
-#SBATCH --account node
-#SBATCH --partition bigmem
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=64
-#SBATCH --mem=256G
-#SBATCH --time=7-00:00:00
-#SBATCH --output /storage/zimmermf/HTT/logs/06_logs_htt_candidates/htt_candidates_%j.out
-#SBATCH --error  /storage/zimmermf/HTT/logs/06_logs_htt_candidates/htt_candidates_%j.err
 
 set -euo pipefail
 
 ###############################################################################
 ### PATH DEFINITIONS
 ###############################################################################
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 TREE_RESULTS=${ROOT}/results/01_results_phylo_tree
 KS_RESULTS=${ROOT}/results/03_results_ks_divergence
 TE_CLASS_RESULTS=${ROOT}/results/05_results_te_classification
@@ -1023,8 +1011,8 @@ python3 - << 'PYEOF'
 import pandas as pd
 from pathlib import Path
 
-ks_file = Path("/storage/zimmermf/HTT/results/06_results_htt_candidates/ks_calculations/te_ks_values.tsv")
-manifest = Path("/storage/zimmermf/HTT/results/06_results_htt_candidates/ks_calculations/tmp/pair_manifest.tsv")
+ks_file = Path("/path/to/HTT/results/06_results_htt_candidates/ks_calculations/te_ks_values.tsv")
+manifest = Path("/path/to/HTT/results/06_results_htt_candidates/ks_calculations/tmp/pair_manifest.tsv")
 
 # Read with explicit whitespace handling
 ks = pd.read_csv(ks_file, sep="\t", dtype=str, skipinitialspace=True)
@@ -1087,13 +1075,13 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-RESULTS = Path("/storage/zimmermf/HTT/results/06_results_htt_candidates")
+RESULTS = Path("/path/to/HTT/results/06_results_htt_candidates")
 
 te_ks_file = RESULTS / "ks_calculations" / "te_ks_values.tsv"
 pairs_json = RESULTS / "ks_calculations" / "te_pairs_for_ks.json"
-busco_ks_file = Path("/storage/zimmermf/HTT/results/03_results_ks_divergence/ks_calculations/node_ks_summary.tsv")
-nodes_file = Path("/storage/zimmermf/HTT/results/03_results_ks_divergence/node_analyses/nodes_info.json")
-clade_file = Path("/storage/zimmermf/HTT/data/clade_assignment.tsv")
+busco_ks_file = Path("/path/to/HTT/results/03_results_ks_divergence/ks_calculations/node_ks_summary.tsv")
+nodes_file = Path("/path/to/HTT/results/03_results_ks_divergence/node_analyses/nodes_info.json")
+clade_file = Path("/path/to/HTT/data/clade_assignment.tsv")
 
 htt_dir = RESULTS / "htt_candidates"
 summary_dir = RESULTS / "summary"
@@ -1284,8 +1272,8 @@ Rscript --vanilla - << 'REOF'
 library(ggplot2)
 library(dplyr)
 
-res <- "/storage/zimmermf/HTT/results/06_results_htt_candidates"
-ks_summary <- "/storage/zimmermf/HTT/results/03_results_ks_divergence/ks_calculations/node_ks_summary.tsv"
+res <- "/path/to/HTT/results/06_results_htt_candidates"
+ks_summary <- "/path/to/HTT/results/03_results_ks_divergence/ks_calculations/node_ks_summary.tsv"
 
 teks <- read.table(file.path(res, "ks_calculations", "te_ks_values.tsv"),
                    header = TRUE, sep = "\t", stringsAsFactors = FALSE)

@@ -88,6 +88,56 @@ Inputs are read from `R/data/` and outputs written to `R/results/`.
 
 ---
 
+## Required External Databases
+
+Several analyses in this pipeline rely on external databases that are not distributed with this repository due to size, update frequency, and licensing considerations. Users must ensure that the appropriate databases are installed and accessible prior to running the full pipeline.
+
+### Pfam
+
+The Pfam protein domain database is used for domain-based annotation of transposable element proteins.
+
+Users should download an appropriate Pfam release (e.g. Pfam-A HMMs) from:
+https://ftp.ebi.ac.uk/pub/databases/Pfam/
+
+After download, the database must be prepared for use with HMMER (e.g. using `hmmpress`).
+
+### CDD (Conserved Domain Database)
+
+The NCBI Conserved Domain Database (CDD) is used for complementary protein domain annotation and classification.
+
+CDD data can be obtained from:
+https://www.ncbi.nlm.nih.gov/Structure/cdd/cdd.shtml
+
+Depending on the analysis step, users may need either the CDD PSSMs or a locally formatted database compatible with RPS-BLAST or related tools.
+
+### EarlGrey Databases
+
+Transposable element annotation using **EarlGrey** requires additional reference databases to be installed and properly configured. These typically include repeat libraries and auxiliary databases required by the underlying tools invoked by EarlGrey.
+
+Users should follow the official EarlGrey documentation for database installation and setup:
+https://github.com/TobyBaril/EarlGrey
+
+All required databases must be downloaded and indexed prior to running EarlGrey-based annotation steps. Paths to these databases are specified within the corresponding HPC scripts and may need to be adapted to local system layouts.
+
+### Database Location and Configuration
+
+The pipeline assumes that Pfam, CDD, and EarlGrey-related databases are available locally and accessible to the relevant HPC scripts. Database paths are defined within the scripts or configuration sections and should be adjusted as needed.
+
+A typical local directory structure may resemble:
+
+databases/
+├── pfam/
+├── cdd/
+└── earlgrey/
+
+Users running the pipeline on shared HPC systems may alternatively point to centrally maintained database installations.
+
+### Reproducibility Note
+
+Exact database versions and releases used in the original analysis are documented in the associated Zenodo archive and/or supplementary materials. For full reproducibility, users are encouraged to use the same database versions where possible.
+
+---
+
 ## Data and Results Availability
 
 Due to size constraints, large input data and intermediate/results files are not stored directly in this GitHub repository. These data are archived on Zenodo in two complementary records corresponding to the two components of the workflow.

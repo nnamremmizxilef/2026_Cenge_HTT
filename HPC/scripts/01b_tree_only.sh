@@ -1,21 +1,7 @@
 #!/bin/bash
-#
-#SBATCH --job-name=phylo_tree_final
-#SBATCH --qos normal
-#SBATCH --account node
-#SBATCH --partition bigmem
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8G
-#SBATCH --time=24:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
-
-
 
 ### define path(s)
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 RESULTS=${ROOT}/results/01_results_phylo_tree
 LOGS=${ROOT}/logs/01_logs_phylo_tree
 

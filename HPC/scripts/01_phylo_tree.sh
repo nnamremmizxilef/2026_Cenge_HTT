@@ -1,26 +1,12 @@
 #!/bin/bash
-#
-#SBATCH --job-name=phylo_tree
-#SBATCH --qos normal
-#SBATCH --account node
-#SBATCH --partition bigmem
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=32
-#SBATCH --mem-per-cpu=8G
-#SBATCH --time=7-00:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
-
-
 
 ### define path(s)
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 GENOMES_DIR=${ROOT}/data/reference_genomes
 RESULTS=${ROOT}/results/01_results_phylo_tree
 LOGS=${ROOT}/logs/01_logs_phylo_tree
 
-BUSCO_DB_PATH=/storage/zimmermf/busco_downloads
+BUSCO_DB_PATH=/path/to/busco_downloads
 
 ### define outgroup for tree rooting
 OUTGROUP="PsefloM405_1_AssemblyScaffolds_2024-02-18"

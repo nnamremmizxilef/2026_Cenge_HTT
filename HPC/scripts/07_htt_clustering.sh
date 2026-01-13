@@ -1,15 +1,4 @@
 #!/bin/bash
-#SBATCH --job-name=htt_clustering
-#SBATCH --qos normal
-#SBATCH --account node
-#SBATCH --partition node
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=1-00:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
 
 set -euo pipefail
 

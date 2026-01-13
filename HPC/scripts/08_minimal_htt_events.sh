@@ -1,21 +1,9 @@
 #!/bin/bash
-#
-#SBATCH --job-name=min_htt_events
-#SBATCH --qos hprio
-#SBATCH --account node
-#SBATCH --partition node
-#SBATCH --mail-user=felix.zimmermann@wsl.ch
-#SBATCH --mail-type=END,FAIL
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=4G
-#SBATCH --time=1-00:00:00
-#SBATCH --output /dev/null
-#SBATCH --error /dev/null
 
 set -euo pipefail
 
 ### paths
-ROOT=/storage/zimmermf/HTT
+ROOT=/path/to/HTT
 
 TREE_RESULTS=${ROOT}/results/01_results_phylo_tree
 KS_RESULTS=${ROOT}/results/03_results_ks_divergence
