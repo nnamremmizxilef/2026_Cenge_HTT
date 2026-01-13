@@ -1,16 +1,14 @@
-#!/usr/bin/env Rscript
 # ==============================================================================
-# HTT contribution to mobilome size analysis
-# ==============================================================================
+# HTT contribution to mobilome size analysis$
 # Quantifies what fraction of each genome's TE content is HTT-derived
 # and tests correlation with genome size
+# ==============================================================================
 
+# --- Libraries ----------------------------------------------------------------
 library(tidyverse)
 library(ggrepel)
 
-# ------------------------------------------------------------------------------
-# Paths
-# ------------------------------------------------------------------------------
+# --- Paths --------------------------------------------------------------------
 data_dir <- "data/09_htt_mobilome_contribution"
 out_dir <- "results/09_htt_mobilome_contribution"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
@@ -20,9 +18,7 @@ htt_file <- file.path(data_dir, "htt_candidates.tsv")
 # Outgroup to exclude
 OUTGROUP <- "PsefloM405"
 
-# ------------------------------------------------------------------------------
-# 1. Load HTT candidates
-# ------------------------------------------------------------------------------
+# --- Load HTT candidates ------------------------------------------------------
 cat("Loading HTT candidates...\n")
 htt <- read_tsv(htt_file, show_col_types = FALSE)
 
@@ -42,11 +38,8 @@ htt_tes <- bind_rows(
 
 cat("  Unique TE copies involved in HTT:", nrow(htt_tes), "\n")
 
-# ------------------------------------------------------------------------------
-# 2. Parse TE coordinates from IDs to get bp per HTT TE
-# ------------------------------------------------------------------------------
+# --- Parse TE coordinates from IDs to get bp per HTT TE -----------------------
 # Format: genome|family::contig:start-end::contig:start-end(strand)
-
 parse_te_bp <- function(te_id) {
   match <- str_match(te_id, "::([^:]+):(\\d+)-(\\d+)")
   if (is.na(match[1])) return(NA_integer_)
@@ -70,9 +63,7 @@ htt_per_genome <- htt_tes %>%
 
 cat("  HTT TEs with valid coordinates:", nrow(htt_tes), "\n")
 
-# ------------------------------------------------------------------------------
-# 3. Load total TE content per genome from BED files
-# ------------------------------------------------------------------------------
+# --- Load total TE content per genome from BED files --------------------------
 cat("\nLoading TE BED files...\n")
 
 bed_files <- list.files(data_dir, pattern = "\\.filteredRepeats\\.bed$", full.names = TRUE)
@@ -125,9 +116,7 @@ mobilome_per_genome <- all_tes %>%
 cat("  Loaded TEs from", n_distinct(all_tes$genome), "genomes\n")
 cat("  Total TE copies:", nrow(all_tes), "\n")
 
-# ------------------------------------------------------------------------------
-# 4. Load genome sizes from highLevelCount files
-# ------------------------------------------------------------------------------
+# --- Load genome sizes from highLevelCount files ------------------------------
 cat("\nLoading genome sizes from highLevelCount files...\n")
 
 hlc_files <- list.files(data_dir, pattern = "\\.highLevelCount\\.txt$", full.names = TRUE)
@@ -142,9 +131,7 @@ genome_sizes <- map_dfr(hlc_files, function(filepath) {
 
 cat("  Genome sizes loaded for", nrow(genome_sizes), "genomes\n")
 
-# ------------------------------------------------------------------------------
-# 5. Merge and calculate HTT contribution
-# ------------------------------------------------------------------------------
+# --- Merge and calculate HTT contribution -------------------------------------
 cat("\nCalculating HTT contributions...\n")
 
 results <- mobilome_per_genome %>%
@@ -160,9 +147,7 @@ results <- mobilome_per_genome %>%
 
 cat("  Genomes in final dataset:", nrow(results), "\n")
 
-# ------------------------------------------------------------------------------
-# 6. Summary statistics
-# ------------------------------------------------------------------------------
+# --- Summary statistics -------------------------------------------------------
 cat("\n", strrep("=", 60), "\n", sep = "")
 cat("SUMMARY\n")
 cat(strrep("=", 60), "\n\n", sep = "")
@@ -181,9 +166,7 @@ cat("  Median: ", round(median(results$htt_te_bp) / 1e6, 2), " Mb\n")
 cat("  Range:  ", round(min(results$htt_te_bp) / 1e6, 2), " - ", 
     round(max(results$htt_te_bp) / 1e6, 2), " Mb\n")
 
-# ------------------------------------------------------------------------------
-# 7. Statistical tests
-# ------------------------------------------------------------------------------
+# --- Statistical tests --------------------------------------------------------
 cat("\n", strrep("=", 60), "\n", sep = "")
 cat("STATISTICAL TESTS\n")
 cat(strrep("=", 60), "\n\n", sep = "")
@@ -206,9 +189,7 @@ cat("HTT proportion vs TE content (Spearman):\n")
 cat("  rho =", round(cor_te$estimate, 3), "\n")
 cat("  p   =", format.pval(cor_te$p.value), "\n")
 
-# ------------------------------------------------------------------------------
-# 8. Plots
-# ------------------------------------------------------------------------------
+# --- Plots --------------------------------------------------------------------
 cat("\nGenerating plots...\n")
 
 cols <- c("#E64B35", "#4DBBD5", "#00A087", "#3C5488", "#F39B7F")
@@ -291,9 +272,7 @@ ggsave(file.path(out_dir, "htt_prop_vs_te_content.png"), p4,
 ggsave(file.path(out_dir, "htt_prop_vs_te_content.pdf"), p4, 
        width = 8, height = 7)
 
-# ------------------------------------------------------------------------------
-# 9. Save results
-# ------------------------------------------------------------------------------
+# --- Save results -------------------------------------------------------------
 results_out <- results %>%
   mutate(
     htt_prop_bp_pct = round(htt_prop_bp * 100, 2),
@@ -320,34 +299,6 @@ write_tsv(results_out, file.path(out_dir, "htt_mobilome_contribution.tsv"))
 
 # Save summary stats
 sink(file.path(out_dir, "htt_summary_stats.txt"))
-cat("HTT Contribution to Mobilome - Summary Statistics\n")
-cat("=================================================\n\n")
-cat("Date:", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "\n\n")
-cat("Outgroup excluded:", OUTGROUP, "\n")
-cat("Genomes analyzed:", nrow(results), "\n\n")
-cat("HTT-derived TE content (% of mobilome):\n")
-cat("  Mean:   ", round(mean(results$htt_prop_bp) * 100, 2), "%\n")
-cat("  Median: ", round(median(results$htt_prop_bp) * 100, 2), "%\n")
-cat("  SD:     ", round(sd(results$htt_prop_bp) * 100, 2), "%\n")
-cat("  Range:  ", round(min(results$htt_prop_bp) * 100, 2), " - ", 
-    round(max(results$htt_prop_bp) * 100, 2), "%\n\n")
-cat("Correlations (Spearman):\n")
-cat("  HTT bp vs genome size:    rho =", round(cor_genome$estimate, 3), 
-    ", p =", format.pval(cor_genome$p.value), "\n")
-cat("  HTT bp vs mobilome:       rho =", round(cor_mob$estimate, 3), 
-    ", p =", format.pval(cor_mob$p.value), "\n")
-cat("  HTT prop vs TE content:   rho =", round(cor_te$estimate, 3), 
-    ", p =", format.pval(cor_te$p.value), "\n")
-sink()
 
-cat("\n", strrep("=", 60), "\n", sep = "")
-cat("OUTPUT FILES\n")
-cat(strrep("=", 60), "\n\n", sep = "")
-cat(file.path(out_dir, "htt_mobilome_contribution.tsv"), "\n")
-cat(file.path(out_dir, "htt_summary_stats.txt"), "\n")
-cat(file.path(out_dir, "htt_proportion_barplot.png/pdf"), "\n")
-cat(file.path(out_dir, "htt_vs_genome_size.png/pdf"), "\n")
-cat(file.path(out_dir, "htt_vs_mobilome.png/pdf"), "\n")
-cat(file.path(out_dir, "htt_prop_vs_te_content.png/pdf"), "\n")
-
-cat("\nDone.\n")
+# --- Session info -------------------------------------------------------------
+sessionInfo()

@@ -101,7 +101,7 @@ internal_data <- tree_data %>%
 
 x_max <- max(tree_data$x)
 
-# --- Plot 1: Tree with HTT events at nodes ------------------------------------
+# Plot 1: Tree with HTT events at nodes
 p1 <- ggtree(tree, ladderize = TRUE) +
   geom_tiplab(size = 3, fontface = "italic") +
   geom_point(
@@ -162,15 +162,6 @@ write.table(events_by_node,
 write.table(events_by_component,
             file.path(results_dir, "events_by_component.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
-
-# --- Output -------------------------------------------------------------------
-cat("\n")
-cat("Plot saved to:", results_dir, "\n")
-cat("  - htt_events_tree.pdf/png\n")
-cat("\n")
-cat("Tables saved to:", results_dir, "\n")
-cat("  - events_by_node.tsv\n")
-cat("  - events_by_component.tsv\n")
 
 # --- Session info -------------------------------------------------------------
 sessionInfo()

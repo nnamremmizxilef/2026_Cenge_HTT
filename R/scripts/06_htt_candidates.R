@@ -90,9 +90,7 @@ cat("HTT candidates (0.5% file):", sum(all_pairs_valid$is_htt_0.5_original), "\n
 rm(non_htt_pairs)
 gc()
 
-# ==============================================================================
-# PART 1: Quantile Sensitivity Analysis
-# ==============================================================================
+# --- Quantile Sensitivity Analysis --------------------------------------------
 
 cat("\n=== Quantile Sensitivity Analysis ===\n")
 
@@ -211,7 +209,9 @@ write.table(quantile_results %>% select(-quantile_col),
             file.path(results_dir, "htt_quantile_sensitivity.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
 
-# --- Plot Q1: HTT count by quantile (bar plot) --------------------------------
+# --- Plots --------------------------------------------------------------------
+
+# Plot 1: HTT count by quantile (bar plot)
 p_q1 <- ggplot(quantile_results, aes(x = quantile, y = htt_count)) +
   geom_col(fill = "#2A9D8F", alpha = 0.8, width = 0.7) +
   geom_text(aes(label = comma(htt_count)), vjust = -0.5, size = 3.5) +
@@ -229,7 +229,7 @@ p_q1 <- ggplot(quantile_results, aes(x = quantile, y = htt_count)) +
 ggsave(file.path(results_dir, "htt_quantile_count.pdf"), p_q1, width = 8, height = 6)
 ggsave(file.path(results_dir, "htt_quantile_count.png"), p_q1, width = 8, height = 6, dpi = 300)
 
-# --- Plot Q2: HTT percentage by quantile --------------------------------------
+# Plot 2: HTT percentage by quantile
 p_q2 <- ggplot(quantile_results, aes(x = quantile, y = htt_percentage)) +
   geom_col(fill = "#E9C46A", alpha = 0.8, width = 0.7) +
   geom_text(aes(label = sprintf("%.3f%%", htt_percentage)), vjust = -0.5, size = 3.5) +
@@ -247,7 +247,7 @@ p_q2 <- ggplot(quantile_results, aes(x = quantile, y = htt_percentage)) +
 ggsave(file.path(results_dir, "htt_quantile_percentage.pdf"), p_q2, width = 8, height = 6)
 ggsave(file.path(results_dir, "htt_quantile_percentage.png"), p_q2, width = 8, height = 6, dpi = 300)
 
-# --- Plot Q3: Sensitivity curve -----------------------------------------------
+# Plot 3: Sensitivity curve
 quantile_results_plot <- quantile_results %>%
   mutate(quantile_num = as.numeric(gsub("%", "", as.character(quantile))))
 
@@ -273,7 +273,7 @@ p_q3 <- ggplot(quantile_results_plot, aes(x = quantile_num, y = htt_count)) +
 ggsave(file.path(results_dir, "htt_sensitivity_curve.pdf"), p_q3, width = 8, height = 6)
 ggsave(file.path(results_dir, "htt_sensitivity_curve.png"), p_q3, width = 8, height = 6, dpi = 300)
 
-# --- Plot Q4: Ks distribution with all quantile thresholds --------------------
+# Plot 4: Ks distribution with all quantile thresholds
 threshold_lines <- data.frame(
   quantile = factor(quantile_labels, levels = quantile_labels),
   threshold = quantile_results$threshold_median
@@ -298,7 +298,7 @@ p_q4 <- ggplot(all_pairs_classified, aes(x = ks)) +
 ggsave(file.path(results_dir, "htt_ks_all_thresholds.pdf"), p_q4, width = 10, height = 6)
 ggsave(file.path(results_dir, "htt_ks_all_thresholds.png"), p_q4, width = 10, height = 6, dpi = 300)
 
-# --- Plot Q5: Fold change from 0.5% baseline ----------------------------------
+# Plot 5: Fold change from 0.5% baseline
 baseline_htt <- quantile_results$htt_count[quantile_results$quantile == "0.5%"]
 
 quantile_results_fc <- quantile_results %>%
@@ -330,7 +330,7 @@ p_q5 <- ggplot(quantile_results_fc, aes(x = quantile_num, y = fold_change)) +
 ggsave(file.path(results_dir, "htt_fold_change.pdf"), p_q5, width = 8, height = 6)
 ggsave(file.path(results_dir, "htt_fold_change.png"), p_q5, width = 8, height = 6, dpi = 300)
 
-# --- Plot Q6: HTT by node for multiple quantiles ------------------------------
+# Plot 6: HTT by node for multiple quantiles
 htt_by_node_quantile <- all_pairs_classified %>%
   group_by(mrca_node) %>%
   summarise(
@@ -372,10 +372,7 @@ write.table(htt_by_node_quantile %>% select(-q_0.5) %>% pivot_wider(names_from =
             file.path(results_dir, "htt_by_node_quantiles.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
 
-# ==============================================================================
-# PART 2: Standard HTT Visualizations (0.5% quantile)
-# ==============================================================================
-
+# --- Standard HTT Visualizations (0.5% quantile) ------------------------------
 cat("\n=== Standard HTT Analysis (0.5% quantile) ===\n")
 
 # Use is_htt_0.5 as the standard HTT classification (recomputed)
@@ -437,7 +434,7 @@ cat("\nBUSCO Ks 0.5% quantile range:",
     round(min(busco_valid$ks_0.5_quantile, na.rm = TRUE), 4), "-",
     round(max(busco_valid$ks_0.5_quantile, na.rm = TRUE), 4), "\n")
 
-# --- Plot 1: TE Ks distribution (HTT vs non-HTT) ------------------------------
+# Plot 1: TE Ks distribution (HTT vs non-HTT)
 min_threshold <- min(busco_valid$ks_0.5_quantile, na.rm = TRUE)
 
 p1 <- ggplot(te_ks_valid, aes(x = ks, fill = is_htt)) +
@@ -467,7 +464,7 @@ p1 <- ggplot(te_ks_valid, aes(x = ks, fill = is_htt)) +
 ggsave(file.path(results_dir, "htt_ks_distribution.pdf"), p1, width = 10, height = 6)
 ggsave(file.path(results_dir, "htt_ks_distribution.png"), p1, width = 10, height = 6, dpi = 300)
 
-# --- Plot 2: Ks density comparison --------------------------------------------
+# Plot 2: Ks density comparison
 p2 <- ggplot(te_ks_valid, aes(x = ks, fill = is_htt, color = is_htt)) +
   geom_density(alpha = 0.4, linewidth = 0.8) +
   scale_x_log10(labels = scales::scientific) +
@@ -495,7 +492,7 @@ p2 <- ggplot(te_ks_valid, aes(x = ks, fill = is_htt, color = is_htt)) +
 ggsave(file.path(results_dir, "htt_ks_density.pdf"), p2, width = 10, height = 6)
 ggsave(file.path(results_dir, "htt_ks_density.png"), p2, width = 10, height = 6, dpi = 300)
 
-# --- Plot 2b: Ks density with HTT colored by TE class -------------------------
+# Plot 2b: Ks density with HTT colored by TE class
 extract_class <- function(te_id) {
   classification <- str_extract(te_id, "(?<=\\|)[^:]+(?=::)")
   str_extract(classification, "^[^/]+")
@@ -548,7 +545,7 @@ ggsave(file.path(results_dir, "htt_ks_density_by_class.png"),
 write.table(class_counts, file.path(results_dir, "htt_by_te_class.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
 
-# --- Plot 3: Ka vs Ks scatter -------------------------------------------------
+# Plot 3: Ka vs Ks scatter
 te_ks_scatter <- te_ks_valid %>% filter(is.finite(ka) & ka > 0 & ka < 10)
 
 p3 <- ggplot(te_ks_scatter, aes(x = ks, y = ka, color = is_htt)) +
@@ -575,7 +572,7 @@ p3 <- ggplot(te_ks_scatter, aes(x = ks, y = ka, color = is_htt)) +
 ggsave(file.path(results_dir, "htt_ka_vs_ks.pdf"), p3, width = 8, height = 7)
 ggsave(file.path(results_dir, "htt_ka_vs_ks.png"), p3, width = 8, height = 7, dpi = 300)
 
-# --- Plot 4: HTT by clade pair heatmap ----------------------------------------
+# Plot 4: HTT by clade pair heatmap
 if (nrow(htt_by_clade_sym) > 0) {
   all_clades <- unique(c(htt_by_clade_sym$qclade, htt_by_clade_sym$sclade))
   
@@ -617,7 +614,7 @@ if (nrow(htt_by_clade_sym) > 0) {
   ggsave(file.path(results_dir, "htt_clade_heatmap.png"), p4, width = 10, height = 9, dpi = 300)
 }
 
-# --- Plot 5: HTT Ks vs BUSCO threshold scatter --------------------------------
+# Plot 5: HTT Ks vs BUSCO threshold scatter
 htt_pairs <- te_ks_valid %>% filter(is_htt == TRUE)
 
 if (nrow(htt_pairs) > 0) {
@@ -641,7 +638,7 @@ if (nrow(htt_pairs) > 0) {
   ggsave(file.path(results_dir, "htt_te_vs_busco_ks.png"), p5, width = 8, height = 7, dpi = 300)
 }
 
-# --- Plot 6: Boxplot of Ks by HTT status --------------------------------------
+# Plot 6: Boxplot of Ks by HTT status
 p6 <- ggplot(te_ks_valid, aes(x = is_htt, y = ks, fill = is_htt)) +
   geom_boxplot(alpha = 0.7, outlier.size = 0.5, outlier.alpha = 0.3) +
   scale_y_log10(labels = scales::scientific) +
@@ -660,7 +657,7 @@ p6 <- ggplot(te_ks_valid, aes(x = is_htt, y = ks, fill = is_htt)) +
 ggsave(file.path(results_dir, "htt_ks_boxplot.pdf"), p6, width = 5, height = 6)
 ggsave(file.path(results_dir, "htt_ks_boxplot.png"), p6, width = 5, height = 6, dpi = 300)
 
-# --- Plot 7: HTT chord diagram ------------------------------------------------
+# Plot 7: HTT chord diagram
 
 in_file   <- file.path(data_dir, "htt_by_clade_pair.tsv")
 clade_map <- file.path(data_dir, "clade_assignment.tsv")
@@ -796,10 +793,7 @@ cat("  - ", out_pdf, "\n", sep = "")
 cat("  - ", out_png, "\n", sep = "")
 cat("  - ", out_tsv, "\n", sep = "")
 
-# ==============================================================================
-# PART 3: Summary Tables and Interpretation
-# ==============================================================================
-
+# --- Summary Tables and Interpretation ----------------------------------------
 summary_stats <- data.frame(
   metric = c(
     "Total TE pairs with Ks",
@@ -857,90 +851,5 @@ max_q <- as.character(interpretation$quantile[which.max(interpretation$fold_chan
 max_htt <- max(interpretation$htt_count)
 max_pct <- max(interpretation$htt_percentage)
 
-interpretation_text <- paste0(
-  "HTT Quantile Sensitivity Analysis - Interpretation\n",
-  "==================================================\n\n",
-  "Background:\n",
-  "- Romeijn et al. (2025) used the 0.5% quantile threshold for HTT detection\n",
-  "- This threshold is conservative, minimizing false positives\n",
-  "- For intra-species comparisons (like C. geophilum), more permissive thresholds\n",
-  "  may capture additional biologically relevant HTT events\n\n",
-  "Results:\n",
-  "- At 0.5% quantile: ", baseline, " HTT candidates (",
-  round(quantile_results$htt_percentage[1], 4), "%)\n",
-  "- At ", max_q, " quantile: ", max_htt, " HTT candidates (",
-  round(max_pct, 4), "%)\n",
-  "- Maximum fold change: ", max_fc, "x (from 0.5% to ", max_q, ")\n\n",
-  "Interpretation:\n"
-)
-
-if (max_fc < 3) {
-  interpretation_text <- paste0(interpretation_text,
-                                "- HTT detection is relatively robust to threshold choice\n",
-                                "- The low HTT percentage reflects genuine biological signal:\n",
-                                "  most TEs are not more similar than expected under vertical inheritance\n",
-                                "- Recommend using 0.5% threshold for consistency with published methods\n"
-  )
-} else if (max_fc < 10) {
-  interpretation_text <- paste0(interpretation_text,
-                                "- HTT detection shows moderate sensitivity to threshold choice\n",
-                                "- Consider using 5% quantile as a compromise between sensitivity and specificity\n",
-                                "- Report both 0.5% (conservative) and 5% (permissive) results\n"
-  )
-} else {
-  interpretation_text <- paste0(interpretation_text,
-                                "- HTT detection is highly sensitive to threshold choice\n",
-                                "- The 0.5% threshold may be too conservative for intra-species comparisons\n",
-                                "- Consider using 5% or 10% quantile for primary analysis\n",
-                                "- Clearly justify threshold choice in methods\n"
-  )
-}
-
-interpretation_text <- paste0(interpretation_text,
-                              "\nNote:\n",
-                              "- Even at the most permissive threshold (", max_q, "), HTT represents only ",
-                              round(max_pct, 3), "% of TE pairs\n",
-                              "- This low rate is expected for within-species comparisons where background\n",
-                              "  divergence is low, requiring near-identical TE sequences to qualify as HTT\n"
-)
-
-writeLines(interpretation_text, file.path(results_dir, "htt_interpretation.txt"))
-cat("\n")
-cat(interpretation_text)
-
-if (nrow(htt_by_clade) > 0) {
-  htt_by_clade_sorted <- htt_by_clade %>% arrange(desc(htt_count))
-  write.table(htt_by_clade_sorted, file.path(results_dir, "htt_by_clade_pair_sorted.tsv"),
-              sep = "\t", row.names = FALSE, quote = FALSE)
-}
-
-cat("\n")
-cat("=== Output Files ===\n")
-cat("Results saved to:", results_dir, "\n\n")
-cat("Quantile sensitivity analysis:\n")
-cat("  - htt_quantile_sensitivity.tsv\n")
-cat("  - htt_quantile_interpretation.tsv\n")
-cat("  - htt_interpretation.txt\n")
-cat("  - busco_quantile_thresholds.tsv\n")
-cat("  - htt_by_node_quantiles.tsv\n")
-cat("  - htt_0.5_file_vs_recomputed.tsv\n")
-cat("  - htt_quantile_count.pdf/png\n")
-cat("  - htt_quantile_percentage.pdf/png\n")
-cat("  - htt_sensitivity_curve.pdf/png\n")
-cat("  - htt_ks_all_thresholds.pdf/png\n")
-cat("  - htt_fold_change.pdf/png\n")
-cat("  - htt_by_node_quantiles.pdf/png\n")
-cat("\nStandard HTT analysis:\n")
-cat("  - htt_summary_stats.tsv\n")
-cat("  - htt_ks_distribution.pdf/png\n")
-cat("  - htt_ks_density.pdf/png\n")
-cat("  - htt_ka_vs_ks.pdf/png\n")
-if (nrow(htt_by_clade) > 0) cat("  - htt_clade_heatmap.pdf/png\n")
-cat("  - htt_te_vs_busco_ks.pdf/png\n")
-cat("  - htt_ks_boxplot.pdf/png\n")
-cat("  - htt_bubbles_same_order_same_nodes.pdf/png\n")
-if (nrow(htt_by_clade) > 0) cat("  - htt_by_clade_pair_sorted.tsv\n")
-
+# --- Session info -------------------------------------------------------------
 sessionInfo()
-
-

@@ -39,7 +39,8 @@ cat("TE content per genome: mean =", round(mean(te_summary$total_bp) / 1e6, 1), 
     round(max(te_summary$total_bp) / 1e6, 1), "Mb\n")
 cat("Filtering removed:", round(mean(te_filtering$pct_removed), 1), "% on average\n")
 
-# --- Plot 1: TE count per genome (stacked by class) ---------------------------
+# --- Plots --------------------------------------------------------------------
+# Plot 1: TE count per genome (stacked by class)
 te_class_long <- te_class %>%
   pivot_longer(cols = -genome, names_to = "class", values_to = "count")
 
@@ -86,7 +87,7 @@ p1 <- ggplot(te_class_long, aes(x = genome, y = count, fill = class)) +
 ggsave(file.path(results_dir, "te_count_per_genome.pdf"), p1, width = 12, height = 6)
 ggsave(file.path(results_dir, "te_count_per_genome.png"), p1, width = 12, height = 6, dpi = 300)
 
-# --- Plot 2: TE content (bp) per genome ---------------------------------------
+# Plot 2: TE content (bp) per genome
 te_summary_bp <- te_summary %>%
   arrange(total_bp) %>%
   mutate(
@@ -112,7 +113,7 @@ p2 <- ggplot(te_summary_bp, aes(x = genome, y = total_mb)) +
 ggsave(file.path(results_dir, "te_content_per_genome.pdf"), p2, width = 10, height = 6)
 ggsave(file.path(results_dir, "te_content_per_genome.png"), p2, width = 10, height = 6, dpi = 300)
 
-# --- Plot 3: TE class composition (stacked bar) -------------------------------
+# Plot 3: TE class composition (stacked bar)
 te_class_long <- te_class %>%
   pivot_longer(cols = -genome, names_to = "class", values_to = "count") %>%
   group_by(genome) %>%
@@ -161,7 +162,7 @@ p3 <- ggplot(te_class_long, aes(x = genome, y = proportion, fill = class)) +
 ggsave(file.path(results_dir, "te_class_composition.pdf"), p3, width = 12, height = 6)
 ggsave(file.path(results_dir, "te_class_composition.png"), p3, width = 12, height = 6, dpi = 300)
 
-# --- Plot 4: TE class totals across all genomes (pie/bar) ---------------------
+# Plot 4: TE class totals across all genomes (pie/bar)
 te_class_totals <- te_class %>%
   select(-genome) %>%
   colSums() %>%
@@ -195,7 +196,7 @@ p4 <- ggplot(te_class_totals, aes(x = class, y = count, fill = class)) +
 ggsave(file.path(results_dir, "te_class_totals.pdf"), p4, width = 8, height = 6)
 ggsave(file.path(results_dir, "te_class_totals.png"), p4, width = 8, height = 6, dpi = 300)
 
-# --- Plot 5: Filtering effect (raw vs filtered) -------------------------------
+# Plot 5: Filtering effect (raw vs filtered)
 te_filtering_long <- te_filtering %>%
   select(genome, raw_count, filtered_count) %>%
   pivot_longer(cols = c(raw_count, filtered_count), 
@@ -230,7 +231,7 @@ p5 <- ggplot(te_filtering_long, aes(x = genome, y = count, fill = type)) +
 ggsave(file.path(results_dir, "te_filtering_effect.pdf"), p5, width = 12, height = 6)
 ggsave(file.path(results_dir, "te_filtering_effect.png"), p5, width = 12, height = 6, dpi = 300)
 
-# --- Plot 6: Percent removed by filtering -------------------------------------
+# Plot 6: Percent removed by filtering
 te_filtering_ordered <- te_filtering %>%
   arrange(pct_removed) %>%
   mutate(genome = factor(genome, levels = genome))
@@ -253,7 +254,7 @@ p6 <- ggplot(te_filtering_ordered, aes(x = genome, y = pct_removed)) +
 ggsave(file.path(results_dir, "te_percent_removed.pdf"), p6, width = 10, height = 6)
 ggsave(file.path(results_dir, "te_percent_removed.png"), p6, width = 10, height = 6, dpi = 300)
 
-# --- Plot 7: TE count vs TE content correlation -------------------------------
+# Plot 7: TE count vs TE content correlation
 p7 <- ggplot(te_summary, aes(x = te_count, y = total_bp / 1e6)) +
   geom_point(size = 3, color = "#2E86AB", alpha = 0.8) +
   geom_smooth(method = "lm", se = TRUE, color = "#E63946", linetype = "dashed") +
@@ -295,21 +296,6 @@ class_summary <- te_class_totals %>%
 
 write.table(class_summary, file.path(results_dir, "te_class_summary_table.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
-
-# --- Output -------------------------------------------------------------------
-cat("\n")
-cat("Plots saved to:", results_dir, "\n")
-cat("  - te_count_per_genome.pdf/png\n")
-cat("  - te_content_per_genome.pdf/png\n")
-cat("  - te_class_composition.pdf/png\n")
-cat("  - te_class_totals.pdf/png\n")
-cat("  - te_filtering_effect.pdf/png\n")
-cat("  - te_percent_removed.pdf/png\n")
-cat("  - te_count_vs_content.pdf/png\n")
-cat("\n")
-cat("Tables saved to:", results_dir, "\n")
-cat("  - te_summary_table.tsv\n")
-cat("  - te_class_summary_table.tsv\n")
 
 # --- Session info -------------------------------------------------------------
 sessionInfo()

@@ -1,23 +1,19 @@
-#!/usr/bin/env Rscript
 # ==============================================================================
 # Flanking region analysis - HTT validation
-# ==============================================================================
 # Compares TE similarity and flanking synteny between HTT and non-HTT pairs
+# ==============================================================================
 
+# --- Libraries ----------------------------------------------------------------
 library(tidyverse)
 library(ggpubr)
 library(scales)
 
-# ------------------------------------------------------------------------------
-# Paths
-# ------------------------------------------------------------------------------
+# --- Paths --------------------------------------------------------------------
 data_dir <- "data/10_flankid"
 out_dir <- "results/10_flankid"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-# ------------------------------------------------------------------------------
-# Load data
-# ------------------------------------------------------------------------------
+# --- Load data ----------------------------------------------------------------
 cat("Loading data...\n")
 
 df <- read_tsv(file.path(data_dir, "flankid_results.tsv"), show_col_types = FALSE)
@@ -36,9 +32,7 @@ df <- df %>%
 # Color palette
 cols <- c("HTT candidates" = "#E64B35", "Non-HTT controls" = "#4DBBD5")
 
-# ------------------------------------------------------------------------------
-# Summary statistics
-# ------------------------------------------------------------------------------
+# --- Summary statistics -------------------------------------------------------
 cat("\n=== Summary Statistics ===\n\n")
 
 summary_df <- df %>%
@@ -74,9 +68,9 @@ flank_test <- wilcox.test(flank_synt_cov_mean ~ label, data = df)
 cat("Flank synteny (Wilcoxon):\n")
 cat("  W =", flank_test$statistic, ", p =", format.pval(flank_test$p.value), "\n\n")
 
-# ------------------------------------------------------------------------------
+# --- Plots --------------------------------------------------------------------
+
 # Plot 1: TE coverage distribution (violin + boxplot)
-# ------------------------------------------------------------------------------
 p1 <- ggplot(df, aes(x = label, y = te_cov_mean, fill = label)) +
   geom_violin(alpha = 0.6, trim = FALSE, width = 0.8) +
   geom_boxplot(width = 0.15, outlier.size = 0.8, alpha = 0.9) +
@@ -100,9 +94,7 @@ ggsave(file.path(out_dir, "01_te_coverage_violin.png"), p1,
 ggsave(file.path(out_dir, "01_te_coverage_violin.pdf"), p1, 
        width = 6, height = 5)
 
-# ------------------------------------------------------------------------------
 # Plot 2: Flank synteny distribution (violin + boxplot)
-# ------------------------------------------------------------------------------
 p2 <- ggplot(df, aes(x = label, y = flank_synt_cov_mean, fill = label)) +
   geom_violin(alpha = 0.6, trim = FALSE, width = 0.8) +
   geom_boxplot(width = 0.15, outlier.size = 0.8, alpha = 0.9) +
@@ -126,9 +118,7 @@ ggsave(file.path(out_dir, "02_flank_synteny_violin.png"), p2,
 ggsave(file.path(out_dir, "02_flank_synteny_violin.pdf"), p2, 
        width = 6, height = 5)
 
-# ------------------------------------------------------------------------------
-# Plot 3: Combined panel (TE + Flank) - PUBLICATION FIGURE
-# ------------------------------------------------------------------------------
+# Plot 3: Combined panel (TE + Flank)
 df_long <- df %>%
   select(pair_id, label, te_cov_mean, flank_synt_cov_mean) %>%
   pivot_longer(
@@ -168,9 +158,7 @@ ggsave(file.path(out_dir, "03_combined_panel_PUBLICATION.png"), p3,
 ggsave(file.path(out_dir, "03_combined_panel_PUBLICATION.pdf"), p3, 
        width = 8, height = 5)
 
-# ------------------------------------------------------------------------------
 # Plot 4: Scatter plot TE vs Flank
-# ------------------------------------------------------------------------------
 p4 <- ggplot(df, aes(x = te_cov_mean, y = flank_synt_cov_mean, color = label)) +
   geom_point(alpha = 0.3, size = 1.2) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
@@ -194,9 +182,7 @@ ggsave(file.path(out_dir, "04_scatter_te_vs_flank.png"), p4,
 ggsave(file.path(out_dir, "04_scatter_te_vs_flank.pdf"), p4, 
        width = 7, height = 6)
 
-# ------------------------------------------------------------------------------
 # Plot 5: HTT score distribution
-# ------------------------------------------------------------------------------
 p5 <- ggplot(df, aes(x = htt_score_te_minus_flank, fill = label)) +
   geom_density(alpha = 0.5, color = NA) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
@@ -219,9 +205,7 @@ ggsave(file.path(out_dir, "05_htt_score_density.png"), p5,
 ggsave(file.path(out_dir, "05_htt_score_density.pdf"), p5, 
        width = 8, height = 5)
 
-# ------------------------------------------------------------------------------
 # Plot 6: Proportion with zero flanking synteny
-# ------------------------------------------------------------------------------
 zero_flank <- df %>%
   mutate(has_flank_synteny = flank_synt_cov_mean > 0) %>%
   group_by(label) %>%
@@ -262,9 +246,7 @@ ggsave(file.path(out_dir, "06_zero_flank_proportion.png"), p6,
 ggsave(file.path(out_dir, "06_zero_flank_proportion.pdf"), p6, 
        width = 6, height = 5)
 
-# ------------------------------------------------------------------------------
 # Plot 7: By TE superfamily
-# ------------------------------------------------------------------------------
 # Top families by count
 top_families <- df %>%
   count(family, sort = TRUE) %>%
@@ -297,17 +279,5 @@ ggsave(file.path(out_dir, "07_flank_by_family.png"), p7,
 ggsave(file.path(out_dir, "07_flank_by_family.pdf"), p7, 
        width = 10, height = 5)
 
-# ------------------------------------------------------------------------------
-# Output summary
-# ------------------------------------------------------------------------------
-cat("\n=== Output files ===\n")
-cat("  ", file.path(out_dir, "summary_statistics.tsv"), "\n")
-cat("  ", file.path(out_dir, "01_te_coverage_violin.png/pdf"), "\n")
-cat("  ", file.path(out_dir, "02_flank_synteny_violin.png/pdf"), "\n")
-cat("  ", file.path(out_dir, "03_combined_panel_PUBLICATION.png/pdf"), " <- USE THIS\n")
-cat("  ", file.path(out_dir, "04_scatter_te_vs_flank.png/pdf"), "\n")
-cat("  ", file.path(out_dir, "05_htt_score_density.png/pdf"), "\n")
-cat("  ", file.path(out_dir, "06_zero_flank_proportion.png/pdf"), "\n")
-cat("  ", file.path(out_dir, "07_flank_by_family.png/pdf"), "\n")
-
-cat("\nDone.\n")
+# --- Session info -------------------------------------------------------------
+sessionInfo()

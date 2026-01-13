@@ -52,7 +52,7 @@ if (any(tree$edge.length[root_edges] == 0)) {
 # Simplify tip labels - remove _1_AssemblyScaffolds... to get just Cenge1005
 tree$tip.label <- gsub("_1_AssemblyScaffolds.*", "", tree$tip.label)
 
-# Remove bootstrap labels (will use node_annot labels instead)
+# Remove bootstrap labels
 tree$node.label <- NULL
 
 cat("Loaded", nrow(ks_raw), "Ks values across", length(unique(ks_raw$node)), "nodes\n")
@@ -199,7 +199,8 @@ ks_valid <- ks_raw %>%
 
 cat("Valid Ks values:", nrow(ks_valid), "/", nrow(ks_raw), "\n")
 
-# --- Plot 1: Overall Ks distribution ------------------------------------------
+# --- Plots --------------------------------------------------------------------
+# Plot 1: Overall Ks distribution
 p1 <- ggplot(ks_valid, aes(x = ks)) +
   geom_histogram(bins = 50, fill = "#2E86AB", color = "white", alpha = 0.8) +
   geom_vline(xintercept = KS_THRESHOLD, linetype = "dashed", color = "#E63946", linewidth = 0.8) +
@@ -220,7 +221,7 @@ p1 <- ggplot(ks_valid, aes(x = ks)) +
 ggsave(file.path(results_dir, "ks_distribution_overall.pdf"), p1, width = 8, height = 5)
 ggsave(file.path(results_dir, "ks_distribution_overall.png"), p1, width = 8, height = 5, dpi = 300)
 
-# --- Plot 2: Ks boxplot per node ----------------------------------------------
+# Plot 2: Ks boxplot per node
 node_order <- ks_valid %>%
   group_by(node) %>%
   summarise(median_ks = median(ks)) %>%
@@ -262,7 +263,7 @@ p2 <- ggplot(ks_valid_labeled, aes(x = label, y = ks, fill = pass_threshold)) +
 ggsave(file.path(results_dir, "ks_boxplot_per_node.pdf"), p2, width = 12, height = 6)
 ggsave(file.path(results_dir, "ks_boxplot_per_node.png"), p2, width = 12, height = 6, dpi = 300)
 
-# --- Plot 3: Node summary - 0.5% quantile -------------------------------------
+# Plot 3: Node summary - 0.5% quantile
 node_summary_ordered <- node_summary_annotated %>%
   arrange(ks_0.5_quantile) %>%
   mutate(node = factor(node, levels = node))
@@ -290,7 +291,7 @@ p3 <- ggplot(node_summary_ordered, aes(x = node, y = ks_0.5_quantile, fill = pas
 ggsave(file.path(results_dir, "ks_quantile_per_node.pdf"), p3, width = 10, height = 6)
 ggsave(file.path(results_dir, "ks_quantile_per_node.png"), p3, width = 10, height = 6, dpi = 300)
 
-# --- Plot 4: Ka/Ks distribution -----------------------------------------------
+# Plot 4: Ka/Ks distribution
 ks_valid_kaks <- ks_valid %>%
   filter(is.finite(ka) & ka > 0) %>%
   mutate(ka_ks = ka / ks)
@@ -312,7 +313,7 @@ p4 <- ggplot(ks_valid_kaks, aes(x = ka_ks)) +
 ggsave(file.path(results_dir, "ka_ks_distribution.pdf"), p4, width = 8, height = 5)
 ggsave(file.path(results_dir, "ka_ks_distribution.png"), p4, width = 8, height = 5, dpi = 300)
 
-# --- Plot 5: Tree with Ks values at nodes -------------------------------------
+# Plot 5: Tree with Ks values at nodes
 tree_data <- fortify(tree)
 
 find_mrca_node <- function(tree, samples) {
@@ -390,7 +391,7 @@ p5 <- ggtree(tree, ladderize = TRUE) +
 ggsave(file.path(results_dir, "tree_with_ks_nodes.pdf"), p5, width = 8, height = 10)
 ggsave(file.path(results_dir, "tree_with_ks_nodes.png"), p5, width = 8, height = 10, dpi = 300)
 
-# --- Plot 6: Tree with collapsed clades ---------------------------------------
+# Plot 6: Tree with collapsed clades
 # Add clade assignment to tip data
 tip_clade_data <- clade_assignments %>%
   mutate(is_collapsed = grepl("^collapsed_", clade))
@@ -414,7 +415,7 @@ p6 <- ggtree(tree, ladderize = TRUE) %<+% tip_clade_data +
 ggsave(file.path(results_dir, "tree_collapsed_clades.pdf"), p6, width = 12, height = 10)
 ggsave(file.path(results_dir, "tree_collapsed_clades.png"), p6, width = 12, height = 10, dpi = 300)
 
-# --- Plot 7: Summary statistics comparison ------------------------------------
+# Plot 7: Summary statistics comparison
 node_summary_long <- node_summary %>%
   select(node, ks_min, ks_0.5_quantile, ks_5_quantile, ks_median, ks_mean) %>%
   pivot_longer(cols = -node, names_to = "statistic", values_to = "value") %>%
@@ -492,22 +493,6 @@ write.table(clade_assignments,
 write.table(clade_summary,
             file.path(results_dir, "clade_summary.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
-
-# --- Output -------------------------------------------------------------------
-cat("\n")
-cat("Plots saved to:", results_dir, "\n")
-cat("  - ks_distribution_overall.pdf/png\n")
-cat("  - ks_boxplot_per_node.pdf/png\n")
-cat("  - ks_quantile_per_node.pdf/png\n")
-cat("  - ka_ks_distribution.pdf/png\n")
-cat("  - tree_with_ks_nodes.pdf/png\n")
-cat("  - tree_collapsed_clades.pdf/png\n")
-cat("  - ks_summary_statistics.pdf/png\n")
-cat("\n")
-cat("Tables saved to:", results_dir, "\n")
-cat("  - node_summary_annotated.tsv\n")
-cat("  - clade_assignments.tsv      <- use this for HTT analysis\n")
-cat("  - clade_summary.tsv\n")
 
 # --- Session info -------------------------------------------------------------
 sessionInfo()
