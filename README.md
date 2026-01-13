@@ -132,11 +132,6 @@ databases/
 └── earlgrey/
 ```
 
-databases/
-├── pfam/
-├── cdd/
-└── earlgrey/
-
 Users running the pipeline on shared HPC systems may alternatively point to centrally maintained database installations.
 
 ### Reproducibility Note
