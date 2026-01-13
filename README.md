@@ -56,7 +56,7 @@ From the repository root:
 
 ```bash
 cd HPC
-bash scripts/setup_project.sh
+bash scripts/00_setup.sh
 ```
 
 This will:
