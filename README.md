@@ -125,6 +125,13 @@ The pipeline assumes that Pfam, CDD, and EarlGrey-related databases are availabl
 
 A typical local directory structure may resemble:
 
+```
+databases/
+├── pfam/
+├── cdd/
+└── earlgrey/
+```
+
 databases/
 ├── pfam/
 ├── cdd/
