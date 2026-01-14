@@ -42,7 +42,7 @@ START_TIME=$(date +%s)
 
 
 ### info
-echo "Running on HYPERION - Date: $(date)"
+echo "Date: $(date)"
 echo "Tree file: ${TREE_FILE}"
 echo "Results directory: ${RESULTS}"
 
@@ -235,9 +235,3 @@ echo "  Statistics table:         ${RESULTS}/decorated_tree-table"
 echo "  Summary table:            ${RESULTS}/decorated_tree-summary"
 echo "  Taxonomy consistency:     ${RESULTS}/decorated_tree-taxonomy"
 echo "  RED values (manual):      ${RESULTS}/red_values.tsv"
-echo ""
-echo "Transfer to local machine for visualization:"
-echo "  scp hyperion:${RESULTS}/decorated_tree* local_path/"
-echo "  scp hyperion:${RESULTS}/red_values.tsv local_path/"
-echo "  scp hyperion:${TREE_FILE} local_path/"
-echo ""

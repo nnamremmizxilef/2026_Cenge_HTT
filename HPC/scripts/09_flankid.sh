@@ -1,78 +1,133 @@
 #!/bin/bash
 
-set -euo pipefail
-
-### paths
+### define path(s)
 ROOT=/path/to/HTT
-export ROOT
-
 GENOMES_DIR=${ROOT}/data/reference_genomes
-
 HTT_RESULTS=${ROOT}/results/06_results_htt_candidates
-IN_HTT=${HTT_RESULTS}/htt_candidates/htt_candidates.tsv
-IN_NON=${HTT_RESULTS}/htt_candidates/non_htt_pairs.tsv
-
 RESULTS=${ROOT}/results/09_results_flankid
 LOGS=${ROOT}/logs/09_logs_flankid
 
-### params
-FLANK=10000                # 10kb up/down
+### input files from previous pipeline steps
+IN_HTT=${HTT_RESULTS}/htt_candidates/htt_candidates.tsv
+IN_NON=${HTT_RESULTS}/htt_candidates/non_htt_pairs.tsv
+
+### flanking region parameters
+# IMPORTANT:
+# These parameters control flanking region extraction and alignment.
+# FLANK: size of upstream/downstream flanking regions to extract (bp)
+FLANK=10000
+
+### non-HTT matching mode
+# per_family_equal: match equal number of non-HTT pairs per TE family
 NON_MATCH_MODE="per_family_equal"
 
-# TE alignment (sensitive)
+### TE alignment parameters (sensitive)
 TE_NUCMER_MINMATCH=20
 TE_NUCMER_MINCLUSTER=65
 
-# FLANK alignment (synteny-driven)
+### flank alignment parameters (synteny-driven)
 FLANK_NUCMER_MODE="--mum"
 FLANK_NUCMER_MINMATCH=40
 FLANK_NUCMER_MINCLUSTER=100
 FLANK_MIN_ALN_LEN=200
 TE_EXCLUDE_PAD=100
 
-### dirs
+
+
+### create results/log folder(s)
 mkdir -p "${RESULTS}"/{tmp,seqs,nucmer,summary}
 mkdir -p "${LOGS}"
 
-### logging
+
+
+### setup logging
 JOBTAG="${SLURM_JOB_ID:-local}_flankid"
 LOGFILE="${LOGS}/${JOBTAG}.log"
 exec > >(tee "${LOGFILE}") 2>&1
 
-echo "### 09_flankid start: $(date)"
-echo "IN_HTT: ${IN_HTT}"
-echo "IN_NON: ${IN_NON}"
-echo "GENOMES_DIR: ${GENOMES_DIR}"
-echo "FLANK: ${FLANK}"
-echo "RESULTS: ${RESULTS}"
+echo "########## Start of job script ##########"
+cat "$0"
+echo "########## End of job script ##########"
 
-### sanity
-for f in "${IN_HTT}" "${IN_NON}"; do
-  if [ ! -f "$f" ]; then
-    echo "ERROR: missing input: $f"
-    exit 1
-  fi
-done
-if [ ! -d "${GENOMES_DIR}" ]; then
-  echo "ERROR: missing genomes dir: ${GENOMES_DIR}"
-  exit 1
-fi
+
+
+### environment setup
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export LANGUAGE=C
+export PYTHONWARNINGS="ignore::FutureWarning"
 
 eval "$(conda shell.bash hook)"
+
+
+
+### define start time
+START_TIME=$(date +%s)
+
+
+
+### info
+echo "Date: $(date)"
+echo "HTT candidates: ${IN_HTT}"
+echo "Non-HTT pairs: ${IN_NON}"
+echo "Genomes directory: ${GENOMES_DIR}"
+echo "Results directory: ${RESULTS}"
+echo ""
+echo "Flanking parameters:"
+echo "  Flank size: ${FLANK} bp"
+echo "  TE exclude padding: ${TE_EXCLUDE_PAD} bp"
+echo ""
+echo "TE NUCmer parameters:"
+echo "  Min match: ${TE_NUCMER_MINMATCH}"
+echo "  Min cluster: ${TE_NUCMER_MINCLUSTER}"
+echo ""
+echo "Flank NUCmer parameters:"
+echo "  Mode: ${FLANK_NUCMER_MODE}"
+echo "  Min match: ${FLANK_NUCMER_MINMATCH}"
+echo "  Min cluster: ${FLANK_NUCMER_MINCLUSTER}"
+echo "  Min alignment length: ${FLANK_MIN_ALN_LEN}"
+
+
+
+### sanity checks
+for f in "${IN_HTT}" "${IN_NON}"; do
+    if [ ! -f "$f" ]; then
+        echo "ERROR: Required file not found: $f"
+        echo "Run 06_htt_candidates.sh first"
+        exit 1
+    fi
+done
+
+if [ ! -d "${GENOMES_DIR}" ]; then
+    echo "ERROR: Genomes directory not found: ${GENOMES_DIR}"
+    exit 1
+fi
+
+HTT_COUNT=$(tail -n +2 "${IN_HTT}" | wc -l)
+NON_COUNT=$(tail -n +2 "${IN_NON}" | wc -l)
+echo "Found ${HTT_COUNT} HTT candidates"
+echo "Found ${NON_COUNT} non-HTT pairs"
+
+
+
+### ===========================================================================
+### STEP 1: Build matched pair list (HTT + matched non-HTT)
+### ===========================================================================
+echo ""
+echo "### STEP 1: Building matched pair list ###"
+echo ""
+
+conda deactivate
 conda activate HTT_python
 
-###############################################################################
-# STEP 1: build pair list = all HTT + matched non-HTT (by TE family)
-###############################################################################
-echo ""
-echo "### STEP 1: Build matched pair list (HTT + matched non-HTT) ###"
-echo ""
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "Python version: $(python --version)"
 
 PAIRLIST="${RESULTS}/summary/flankid_pairlist.tsv"
 
 export IN_HTT IN_NON PAIRLIST
 
-python3 << 'PY'
+python3 << 'EOF'
 import os
 from pathlib import Path
 import pandas as pd
@@ -131,20 +186,29 @@ print(f"HTT pairs: {len(htt)}")
 print(f"Matched non-HTT pairs: {len(non_sel)}")
 print(f"Total pairs: {len(pairs)}")
 print(f"Wrote: {pairlist_out}")
-PY
+EOF
 
-
-
-###############################################################################
-# STEP 2: Extract TE+flanks sequences from the two genomes
-###############################################################################
 echo ""
-echo "### STEP 2: Extract TE+flanks sequences (per pair) ###"
+echo "STEP 1 complete."
+
+conda deactivate
+
+
+
+### ===========================================================================
+### STEP 2: Extract TE+flanks sequences from genomes
+### ===========================================================================
 echo ""
+echo "### STEP 2: Extracting TE+flanks sequences ###"
+echo ""
+
+conda activate HTT_python
+
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 
 export GENOMES_DIR RESULTS FLANK PAIRLIST
 
-python3 << 'PY'
+python3 << 'EOF'
 import os
 from pathlib import Path
 import pandas as pd
@@ -160,12 +224,11 @@ out_seqs.mkdir(parents=True, exist_ok=True)
 
 FLANK = int(os.environ.get("FLANK", "10000"))
 
-# Fixed regex: removed $ anchor to handle trailing ::contig:start-end(strand) suffix
 pat = re.compile(r"^(?P<genome>[^|]+)\|(?P<fam>[^:]+)::(?P<contig>[^:]+):(?P<start>\d+)-(?P<end>\d+)")
 
 @lru_cache(maxsize=4)
 def load_fasta_indexed(path: str):
-    """Load FASTA with LRU cache to limit memory (keeps max 4 genomes)."""
+    """Load FASTA with LRU cache to limit memory."""
     seqs = {}
     name = None
     buf = []
@@ -183,12 +246,10 @@ def load_fasta_indexed(path: str):
     return seqs
 
 def get_genome_path(genome_name: str) -> Path:
-    # Try exact match first
     for ext in [".fasta", ".fa"]:
         p = genomes_dir / f"{genome_name}{ext}"
         if p.exists():
             return p
-    # Try glob pattern for longer names (e.g., Cenge1005 -> Cenge1005_1_AssemblyScaffolds_*.fasta)
     for ext in [".fasta", ".fa"]:
         matches = [f for f in genomes_dir.glob(f"{genome_name}*{ext}") 
                    if not any(x in f.name for x in ['.bak', '.dict', '.fai', '.prep', '.ndb', '.nhr', '.nin'])]
@@ -236,13 +297,13 @@ for i, r in pairs.iterrows():
     try:
         qseq = get_seq(q["genome"], q["contig"], q_win0, q_win1)
         sseq = get_seq(s["genome"], s["contig"], s_win0, s_win1)
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         fails["missing_fasta"] += 1
         continue
-    except KeyError as e:
+    except KeyError:
         fails["missing_contig"] += 1
         continue
-    except Exception as e:
+    except Exception:
         fails["other_extract_error"] += 1
         continue
 
@@ -286,26 +347,37 @@ print(f"Pairs with extracted windows: {len(meta)}")
 if fails:
     print(f"Dropped pairs (reasons): {dict(fails)}")
 print(f"Wrote: {meta_out}")
-PY
+EOF
 
-
-
-###############################################################################
-# STEP 3: Run nucmer for each pair + compute coverage
-###############################################################################
 echo ""
-echo "### STEP 3: NUCmer + compute TE / synteny-flank mapping rates ###"
+echo "STEP 2 complete."
+
+conda deactivate
+
+
+
+### ===========================================================================
+### STEP 3: Run NUCmer and compute coverage metrics
+### ===========================================================================
+echo ""
+echo "### STEP 3: Running NUCmer and computing TE/flank metrics ###"
 echo ""
 
-export RESULTS TE_NUCMER_MINMATCH TE_NUCMER_MINCLUSTER FLANK_NUCMER_MODE FLANK_NUCMER_MINMATCH FLANK_NUCMER_MINCLUSTER FLANK_MIN_ALN_LEN TE_EXCLUDE_PAD
+conda activate HTT_mummer
 
-python3 << 'PY'
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "nucmer version: $(nucmer --version 2>&1 | head -1)"
+
+export RESULTS TE_NUCMER_MINMATCH TE_NUCMER_MINCLUSTER 
+export FLANK_NUCMER_MODE FLANK_NUCMER_MINMATCH FLANK_NUCMER_MINCLUSTER 
+export FLANK_MIN_ALN_LEN TE_EXCLUDE_PAD
+
+python3 << 'EOF'
 import os
 from pathlib import Path
 import pandas as pd
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import sys
 
 results_dir = Path(os.environ.get("RESULTS", ""))
 meta_file = results_dir / "summary" / "pair_meta.tsv"
@@ -353,14 +425,13 @@ def intersect(intervals, a0, a1):
     return out
 
 def parse_coords(coords_path: Path):
-    """Parse show-coords -rclT output, skipping header lines robustly."""
+    """Parse show-coords -rclT output."""
     alns = []
     with coords_path.open() as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
-            # Skip header lines
             if line.startswith("[") or line.startswith("=") or "NUCMER" in line:
                 continue
             parts = line.split("\t")
@@ -396,7 +467,6 @@ def longest_collinear_chain_cov(alns, q_region, s_region, min_len=200):
     if not keep:
         return 0
 
-    # Choose best orientation
     tot = {+1: 0, -1: 0}
     for q0, q1, s0, s1, ori in keep:
         tot[ori] += (q1 - q0 + 1)
@@ -408,7 +478,6 @@ def longest_collinear_chain_cov(alns, q_region, s_region, min_len=200):
     keep.sort(key=lambda x: (x[0], x[1]))
     n = len(keep)
     
-    # DP for longest monotone chain
     dp = [0] * n
     prev = [-1] * n
     for i in range(n):
@@ -422,7 +491,6 @@ def longest_collinear_chain_cov(alns, q_region, s_region, min_len=200):
                     dp[i] = cand
                     prev[i] = j
 
-    # Traceback
     end = max(range(n), key=lambda i: dp[i])
     chain = []
     while end != -1:
@@ -430,7 +498,6 @@ def longest_collinear_chain_cov(alns, q_region, s_region, min_len=200):
         end = prev[end]
     chain.reverse()
 
-    # Union coverage restricted to q_region
     q_intervals = [(max(q0, q0r), min(q1, q1r)) for q0, q1, _, _, _ in chain]
     q_intervals = [(a, b) for a, b in q_intervals if a <= b]
     return union_covered(q_intervals)
@@ -460,7 +527,7 @@ def process_pair(r):
              "-p", str(prefix_fl), qfa, sfa])
         with coords_fl.open("w") as out:
             subprocess.run(["show-coords", "-rclT", delta_fl], check=True, stdout=out, stderr=subprocess.DEVNULL)
-    except Exception as e:
+    except Exception:
         return None
 
     q_len = int(r["q_len"])
@@ -486,7 +553,6 @@ def process_pair(r):
         a, b = reg
         return max(0, b - a + 1)
 
-    # Flank regions excluding TE ± pad
     q_up = (1, max(1, q_te0 - TE_pad - 1))
     q_dn = (min(q_len, q_te1 + TE_pad + 1), q_len)
     s_up = (1, max(1, s_te0 - TE_pad - 1))
@@ -495,7 +561,6 @@ def process_pair(r):
     q_up_cov_bp = longest_collinear_chain_cov(fl_alns, q_up, s_up, min_len=FL_min_len) if region_len(q_up) else 0
     q_dn_cov_bp = longest_collinear_chain_cov(fl_alns, q_dn, s_dn, min_len=FL_min_len) if region_len(q_dn) else 0
     
-    # Swap q/s for subject-based calculation
     fl_alns_swap = [(c, d, a, b, pid, lq, ori) for a, b, c, d, pid, lq, ori in fl_alns]
     s_up_cov_bp = longest_collinear_chain_cov(fl_alns_swap, s_up, q_up, min_len=FL_min_len) if region_len(s_up) else 0
     s_dn_cov_bp = longest_collinear_chain_cov(fl_alns_swap, s_dn, q_dn, min_len=FL_min_len) if region_len(s_dn) else 0
@@ -531,7 +596,7 @@ def process_pair(r):
         "htt_score_te_minus_flank": htt_score,
     }
 
-# Parallel processing
+# parallel processing
 rows = []
 print(f"Processing {len(meta)} pairs with {NCPUS} threads...")
 with ThreadPoolExecutor(max_workers=NCPUS) as executor:
@@ -550,98 +615,39 @@ out_tsv = results_dir / "summary" / "flankid_results.tsv"
 out.to_csv(out_tsv, sep="\t", index=False)
 print(f"Computed results for pairs: {len(out)}")
 print(f"Wrote: {out_tsv}")
-PY
+EOF
+
+echo ""
+echo "STEP 3 complete."
 
 conda deactivate
 
 
-###############################################################################
-# STEP 4: Plots
-###############################################################################
+
+### ===========================================================================
+### STEP 4: Generate summary stats
+### ===========================================================================
 echo ""
-echo "### STEP 4: Plot distributions (HTT vs non-HTT) ###"
+echo "### STEP 4: Generating summary stats ###"
 echo ""
 
 conda activate HTT_r
 
-Rscript --vanilla - << 'RS'
-library(ggplot2)
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "R version: $(R --version | head -1)"
+
+export RESULTS
+
+Rscript --vanilla << 'REOF'
 library(dplyr)
 
-root <- Sys.getenv("ROOT", "/path/to/HTT")
-infile <- file.path(root, "results/09_results_flankid/summary/flankid_results.tsv")
-outdir <- file.path(root, "results/09_results_flankid/summary")
+results_dir <- Sys.getenv("RESULTS")
+infile <- file.path(results_dir, "summary/flankid_results.tsv")
+outdir <- file.path(results_dir, "summary")
 dir.create(outdir, showWarnings = FALSE, recursive = TRUE)
 
 df <- read.table(infile, header = TRUE, sep = "\t", stringsAsFactors = FALSE)
 df <- df %>% filter(is.finite(te_cov_mean), is.finite(flank_synt_cov_mean))
-
-# Color palette
-cols <- c("HTT" = "#E64B35", "nonHTT" = "#4DBBD5")
-
-# 1. Flank synteny histogram + density
-p1 <- ggplot(df, aes(x = flank_synt_cov_mean, fill = label)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 50, alpha = 0.5, position = "identity") +
-  geom_density(aes(color = label), linewidth = 0.8, fill = NA) +
-  scale_fill_manual(values = cols) +
-  scale_color_manual(values = cols) +
-  labs(x = "Flank synteny coverage (collinear chain)", y = "Density",
-       title = "Flanking region synteny: HTT vs non-HTT") +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "top")
-ggsave(file.path(outdir, "flank_synt_cov_hist.png"), p1, width = 10, height = 6, dpi = 300)
-
-# 2. TE coverage histogram + density
-p2 <- ggplot(df, aes(x = te_cov_mean, fill = label)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 50, alpha = 0.5, position = "identity") +
-  geom_density(aes(color = label), linewidth = 0.8, fill = NA) +
-  scale_fill_manual(values = cols) +
-  scale_color_manual(values = cols) +
-  labs(x = "TE coverage mean", y = "Density", title = "TE mapping rate: HTT vs non-HTT") +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "top")
-ggsave(file.path(outdir, "te_cov_hist.png"), p2, width = 10, height = 6, dpi = 300)
-
-# 3. HTT score histogram + density
-p3 <- ggplot(df, aes(x = htt_score_te_minus_flank, fill = label)) +
-  geom_histogram(aes(y = after_stat(density)), bins = 60, alpha = 0.5, position = "identity") +
-  geom_density(aes(color = label), linewidth = 0.8, fill = NA) +
-  scale_fill_manual(values = cols) +
-  scale_color_manual(values = cols) +
-  labs(x = "HTT score (TE_cov - flank_synt_cov)", y = "Density",
-       title = "HTT score distribution") +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "top")
-ggsave(file.path(outdir, "htt_score_hist.png"), p3, width = 10, height = 6, dpi = 300)
-
-# 4. Scatter plot with marginal densities
-p4 <- ggplot(df, aes(x = te_cov_mean, y = flank_synt_cov_mean, color = label)) +
-  geom_point(alpha = 0.4, size = 1.5) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray40") +
-  scale_color_manual(values = cols) +
-  labs(x = "TE coverage mean", y = "Flank synteny coverage mean",
-       title = "TE vs synteny-flank mapping") +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "top")
-ggsave(file.path(outdir, "te_vs_flank_synt_scatter.png"), p4, width = 8, height = 7, dpi = 300)
-
-# 5. Violin plot comparison
-df_long <- df %>%
-  tidyr::pivot_longer(cols = c(te_cov_mean, flank_synt_cov_mean),
-                      names_to = "metric", values_to = "coverage") %>%
-  mutate(metric = recode(metric,
-                         "te_cov_mean" = "TE",
-                         "flank_synt_cov_mean" = "Flank synteny"))
-
-p5 <- ggplot(df_long, aes(x = label, y = coverage, fill = label)) +
-  geom_violin(alpha = 0.6, trim = FALSE) +
-  geom_boxplot(width = 0.15, outlier.size = 0.5, alpha = 0.8) +
-  facet_wrap(~metric) +
-  scale_fill_manual(values = cols) +
-  labs(x = NULL, y = "Coverage", title = "Coverage distributions by category") +
-  theme_minimal(base_size = 12) +
-  theme(legend.position = "none")
-ggsave(file.path(outdir, "coverage_violin.png"), p5, width = 10, height = 6, dpi = 300)
 
 # Summary stats
 summary_stats <- df %>%
@@ -659,16 +665,31 @@ summary_stats <- df %>%
 write.table(summary_stats, file.path(outdir, "summary_stats.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
 
-cat("Plots and summary written to:", outdir, "\n")
-RS
+cat("Summary written to:", outdir, "\n")
+REOF
+
+echo ""
+echo "STEP 4 complete."
 
 conda deactivate
 
+
+
+### ===========================================================================
+### FINISH
+### ===========================================================================
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
 echo ""
-echo "### 09_flankid done: $(date)"
-echo "Key outputs:"
-echo "  ${RESULTS}/summary/flankid_pairlist.tsv"
-echo "  ${RESULTS}/summary/pair_meta.tsv"
-echo "  ${RESULTS}/summary/flankid_results.tsv"
-echo "  ${RESULTS}/summary/summary_stats.tsv"
-echo "  ${RESULTS}/summary/*.png"
+echo "=========================================="
+echo "Pipeline complete!"
+echo "Total runtime: $((ELAPSED / 3600))h $(((ELAPSED % 3600) / 60))m $((ELAPSED % 60))s"
+echo "=========================================="
+echo ""
+echo "Output files:"
+echo "  Pair list:              ${RESULTS}/summary/flankid_pairlist.tsv"
+echo "  Pair metadata:          ${RESULTS}/summary/pair_meta.tsv"
+echo "  FlankID results:        ${RESULTS}/summary/flankid_results.tsv"
+echo "  Summary statistics:     ${RESULTS}/summary/summary_stats.tsv"
+echo "  Extracted sequences:    ${RESULTS}/seqs/"
+echo ""

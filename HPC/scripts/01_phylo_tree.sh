@@ -5,10 +5,12 @@ ROOT=/path/to/HTT
 GENOMES_DIR=${ROOT}/data/reference_genomes
 RESULTS=${ROOT}/results/01_results_phylo_tree
 LOGS=${ROOT}/logs/01_logs_phylo_tree
-
 BUSCO_DB_PATH=/path/to/busco_downloads
 
 ### define outgroup for tree rooting
+# IMPORTANT:
+# The outgroup name must EXACTLY match the genome identifier (i.e. file prefix or assembly name) as provided in the downloaded genome dataset.
+# Users MUST update this value to reflect the actual outgroup present in their local genome directory.
 OUTGROUP="PsefloM405_1_AssemblyScaffolds_2024-02-18"
 
 
@@ -46,7 +48,7 @@ START_TIME=$(date +%s)
 
 
 ### info
-echo "Running on HYPERION - Date: $(date)"
+echo "Date: $(date)"
 echo "Genomes directory: ${GENOMES_DIR}"
 echo "Results directory: ${RESULTS}"
 echo "BUSCO database path: ${BUSCO_DB_PATH}"
@@ -66,6 +68,18 @@ if [ "${GENOME_COUNT}" -eq 0 ]; then
     exit 1
 fi
 echo "Found ${GENOME_COUNT} genome assemblies"
+
+
+
+### decompress any .gz files in genomes directory
+echo "Checking for compressed genome FASTA files..."
+
+shopt -s nullglob
+for gz in "${GENOMES_DIR}"/*.gz; do
+    echo "Decompressing: $(basename "${gz}")"
+    gunzip -k "${gz}"
+done
+shopt -u nullglob
 
 
 
@@ -93,7 +107,8 @@ echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 echo "BUSCO version: $(busco --version)"
 
 for genome in "${GENOMES_DIR}"/*.fasta; do
-    GENOME_NAME=$(basename "${genome}" .fasta)
+    GENOME_BASENAME=$(basename "${genome}")
+    GENOME_NAME="${GENOME_BASENAME%%.*}"
     
     for lineage in "${LINEAGES[@]}"; do
         echo ""
@@ -139,13 +154,13 @@ conda activate HTT_python
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 echo "Python version: $(python --version)"
 
-python3 << EOF
+python3 << 'EOF'
 import os
 from pathlib import Path
 import re
 
-busco_dir = Path("${RESULTS}/busco_runs")
-summary_file = Path("${RESULTS}/busco_summaries/busco_completeness_table.tsv")
+busco_dir = Path(os.environ.get('RESULTS', '.') + '/busco_runs')
+summary_file = Path(os.environ.get('RESULTS', '.') + '/busco_summaries/busco_completeness_table.tsv')
 summary_file.parent.mkdir(exist_ok=True)
 
 lineages = [
@@ -216,17 +231,20 @@ conda activate HTT_python
 PHYLO_LINEAGE="dothideomycetes_odb10"
 MISSING_THRESHOLD=0.10  # max 10% missing genomes per gene
 
-python3 << EOF
+export PHYLO_LINEAGE MISSING_THRESHOLD
+
+python3 << 'EOF'
 import os
 from pathlib import Path
 from collections import defaultdict
 
-busco_dir = Path("${RESULTS}/busco_runs")
-seq_dir = Path("${RESULTS}/sequences")
+results_path = os.environ.get('RESULTS', '.')
+busco_dir = Path(results_path + '/busco_runs')
+seq_dir = Path(results_path + '/sequences')
 seq_dir.mkdir(exist_ok=True)
 
-lineage = "${PHYLO_LINEAGE}"
-missing_threshold = ${MISSING_THRESHOLD}
+lineage = os.environ.get('PHYLO_LINEAGE', 'dothideomycetes_odb10')
+missing_threshold = float(os.environ.get('MISSING_THRESHOLD', '0.10'))
 
 # find all samples with dothideomycetes_odb10 results
 samples = []
@@ -272,7 +290,7 @@ print(f"Selected {len(selected)} / {len(total_buscos)} BUSCOs present in >= {min
 print(f"Sequence files written to: {seq_dir}")
 
 # write gene list
-with open(seq_dir.parent / "selected_buscos.txt", "w") as f:
+with open(Path(results_path) / "selected_buscos.txt", "w") as f:
     for busco_id in sorted(selected):
         f.write(f"{busco_id}\n")
 EOF
@@ -354,13 +372,17 @@ echo ""
 
 conda activate HTT_python
 
-python3 << EOF
+export ALN_DIR
+
+python3 << 'EOF'
+import os
 from pathlib import Path
 from collections import defaultdict
 
-aln_dir = Path("${ALN_DIR}")
-out_file = Path("${RESULTS}/concatenated.faa")
-partition_file = Path("${RESULTS}/partitions.txt")
+aln_dir = Path(os.environ.get('ALN_DIR', '.'))
+results_path = os.environ.get('RESULTS', '.')
+out_file = Path(results_path) / "concatenated.faa"
+partition_file = Path(results_path) / "partitions.txt"
 
 samples = set()
 gene_alns = {}
@@ -433,13 +455,15 @@ conda activate HTT_iqtree
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 echo "IQ-TREE version: $(iqtree2 --version 2>&1 | head -1)"
 
+cd "${RESULTS}"
+
 iqtree2 \
     -s concatenated.faa \
     -B 1000 \
     -m MFP \
     -mset LG,WAG,JTT \
     -mrate G4,R4 \
-    -T "${SLURM_CPUS_PER_TASK}" \
+    -T AUTO \
     --prefix phylogeny
 
 echo ""
@@ -461,7 +485,7 @@ conda activate HTT_r
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 echo "R version: $(R --version | head -1)"
 
-Rscript --vanilla - << EOF
+Rscript --vanilla << EOF
 library(ape)
 
 tree <- read.tree("phylogeny.treefile")
@@ -510,5 +534,5 @@ echo "  Concatenated:         ${RESULTS}/concatenated.faa"
 echo "  Partitions:           ${RESULTS}/partitions.txt"
 echo "  Tree file (unrooted): ${RESULTS}/phylogeny.treefile"
 echo "  Tree file (rooted):   ${RESULTS}/phylogeny_rooted.treefile"
-echo "  IQ-TREE log:          ${RESULTS}/phylogeny.log"
+echo "  IQ-TREE log:          ${RESULTS}/phylogeny.iqtree"
 echo ""

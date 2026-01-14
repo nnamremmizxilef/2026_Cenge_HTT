@@ -1,70 +1,118 @@
 #!/bin/bash
 
-set -euo pipefail
-
-### paths
+### define path(s)
 ROOT=/path/to/HTT
-
 TREE_RESULTS=${ROOT}/results/01_results_phylo_tree
 KS_RESULTS=${ROOT}/results/03_results_ks_divergence
 CLUST_RESULTS=${ROOT}/results/07_results_htt_clustering
-
 RESULTS=${ROOT}/results/08_results_minimal_htt_events
 LOGS=${ROOT}/logs/08_logs_minimal_htt_events
 
-# inputs
+### input files from previous pipeline steps
 TREE_FILE=${TREE_RESULTS}/phylogeny_rooted.treefile
 NODES_INFO=${KS_RESULTS}/node_analyses/nodes_info.json
-CLADE_ASSIGN=${ROOT}/data/clade_assignment.tsv
 
-# Output from step 07 with columns: community_id, qseqid, sseqid, qclade, sclade, ...
+### output from step 07
+# Contains columns: community_id, qseqid, sseqid, qclade, sclade, ...
 CLUSTERED_HTT_TSV=${CLUST_RESULTS}/summary/htt_pairs_with_community.tsv
 
+### user-provided input
+# IMPORTANT:
+# Users MUST provide a clade assignment file mapping genomes to clades. The clade assigment file is generated using the local R scripts.
+# This should be the same file used in previous steps.
+CLADE_ASSIGN=${ROOT}/data/clade_assignment.tsv
 
-### create dirs
+
+
+### create results/log folder(s)
 mkdir -p "${RESULTS}"/{network,clusters,events,trimmed_trees,summary,tmp}
 mkdir -p "${LOGS}"
 
-### logging
+
+
+### setup logging
 JOBTAG="${SLURM_JOB_ID}_minimal_htt_events"
 LOGFILE="${LOGS}/${JOBTAG}.log"
 exec > >(tee "${LOGFILE}") 2>&1
 
-echo "### 08_minimal_htt_events starting: $(date)"
-echo "TREE_FILE: ${TREE_FILE}"
-echo "NODES_INFO: ${NODES_INFO}"
-echo "CLADE_ASSIGN: ${CLADE_ASSIGN}"
-echo "CLUSTERED_HTT_TSV: ${CLUSTERED_HTT_TSV}"
-echo "RESULTS: ${RESULTS}"
+echo "########## Start of job script ##########"
+cat "$0"
+echo "########## End of job script ##########"
 
-### sanity
-for f in "${TREE_FILE}" "${NODES_INFO}" "${CLADE_ASSIGN}" "${CLUSTERED_HTT_TSV}"; do
-  if [ ! -f "$f" ]; then
-    echo "ERROR: missing input: $f"
-    exit 1
-  fi
-done
+
+
+### environment setup
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export LANGUAGE=C
+export PYTHONWARNINGS="ignore::FutureWarning"
 
 eval "$(conda shell.bash hook)"
-conda activate HTT_python_ete3
 
 
-###############################################################################
-# STEP 1: Build "community network" (nodes = communities, edges if share TE)
-#         Single-linkage clustering = connected components
-###############################################################################
+
+### define start time
+START_TIME=$(date +%s)
+
+
+
+### info
+echo "Date: $(date)"
+echo "Tree file: ${TREE_FILE}"
+echo "Nodes info: ${NODES_INFO}"
+echo "Clade assignment: ${CLADE_ASSIGN}"
+echo "Clustered HTT: ${CLUSTERED_HTT_TSV}"
+echo "Results directory: ${RESULTS}"
+
+
+
+### sanity checks
+for f in "${TREE_FILE}" "${NODES_INFO}" "${CLADE_ASSIGN}" "${CLUSTERED_HTT_TSV}"; do
+    if [ ! -f "$f" ]; then
+        echo "ERROR: Required file not found: $f"
+        case "$f" in
+            *01_results*) echo "Run 01_phylo_tree.sh first" ;;
+            *03_results*) echo "Run 03_ks_divergence.sh first" ;;
+            *07_results*) echo "Run 07_htt_clustering.sh first" ;;
+            *clade_assignment*) echo "Please provide a clade assignment file" ;;
+        esac
+        exit 1
+    fi
+done
+
+HTT_COUNT=$(tail -n +2 "${CLUSTERED_HTT_TSV}" | wc -l)
+if [ "${HTT_COUNT}" -eq 0 ]; then
+    echo "ERROR: No clustered HTT candidates found in ${CLUSTERED_HTT_TSV}"
+    exit 1
+fi
+echo "Found ${HTT_COUNT} clustered HTT candidates"
+
+
+
+### ===========================================================================
+### STEP 1: Build network of communities and connected components
+### ===========================================================================
 echo ""
-echo "### STEP 1: Build network of communities and connected components (single linkage) ###"
+echo "### STEP 1: Building community network (single-linkage clustering) ###"
 echo ""
 
-python3 - "${CLUSTERED_HTT_TSV}" "${RESULTS}" << 'PY'
-import sys
+conda deactivate
+conda activate HTT_python
+
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "Python version: $(python --version)"
+echo "networkx version: $(python -c 'import networkx; print(networkx.__version__)')"
+
+export CLUSTERED_HTT_TSV RESULTS
+
+python3 << 'EOF'
+import os
 from pathlib import Path
 import pandas as pd
 import networkx as nx
 
-clustered_tsv = Path(sys.argv[1])
-results_dir = Path(sys.argv[2])
+clustered_tsv = Path(os.environ.get('CLUSTERED_HTT_TSV', ''))
+results_dir = Path(os.environ.get('RESULTS', ''))
 outdir = results_dir / "network"
 outdir.mkdir(parents=True, exist_ok=True)
 
@@ -78,7 +126,7 @@ df["qseqid"] = df["qseqid"].astype(str)
 df["sseqid"] = df["sseqid"].astype(str)
 df["community_id"] = df["community_id"].astype(str)
 
-# Build TE -> communities index
+# build TE -> communities index
 te_to_comms = {}
 for tecol in ["qseqid","sseqid"]:
     for te, sub in df.groupby(tecol):
@@ -103,11 +151,11 @@ for te, comms in te_to_comms.items():
 print(f"Communities: {G.number_of_nodes():,}")
 print(f"Edges (shared TE): {G.number_of_edges():,}")
 
-# Single linkage clustering = connected components
+# single linkage clustering = connected components
 components = list(nx.connected_components(G))
 print(f"Connected components (single-linkage clusters): {len(components):,}")
 
-# Write mapping: community -> component
+# write mapping: community -> component
 rows = []
 for cid, comp in enumerate(components, start=1):
     for comm in comp:
@@ -116,35 +164,48 @@ for cid, comp in enumerate(components, start=1):
 map_df = pd.DataFrame(rows, columns=["community_id","component_id","component_n_communities"])
 map_df.to_csv(outdir / "community_to_component.tsv", sep="\t", index=False)
 
-# Component summary
+# component summary
 comp_sizes = map_df.groupby("component_id")["community_id"].count().reset_index(name="n_communities")
 comp_sizes.to_csv(outdir / "component_sizes.tsv", sep="\t", index=False)
 
-print("Wrote:")
-print(" -", outdir / "community_to_component.tsv")
-print(" -", outdir / "component_sizes.tsv")
-PY
+print(f"Wrote: {outdir / 'community_to_component.tsv'}")
+print(f"Wrote: {outdir / 'component_sizes.tsv'}")
+EOF
 
-
-###############################################################################
-# STEP 2: For each component, trim tree with ete3 and count minimal HTT events
-###############################################################################
 echo ""
-echo "### STEP 2: Minimal HTT events per component (with ete3 tree trimming) ###"
+echo "STEP 1 complete."
+
+conda deactivate
+
+
+
+### ===========================================================================
+### STEP 2: Calculate minimal HTT events per component
+### ===========================================================================
+echo ""
+echo "### STEP 2: Calculating minimal HTT events per component ###"
 echo ""
 
-python3 - "${TREE_FILE}" "${NODES_INFO}" "${CLADE_ASSIGN}" "${CLUSTERED_HTT_TSV}" "${RESULTS}" << 'PY'
-import sys
+conda activate HTT_python_ete3
+
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "Python version: $(python --version)"
+echo "ete3 version: $(python -c 'import ete3; print(ete3.__version__)' 2>/dev/null || echo 'not available')"
+
+export TREE_FILE NODES_INFO CLADE_ASSIGN CLUSTERED_HTT_TSV RESULTS
+
+python3 << 'EOF'
+import os
 from pathlib import Path
 import json
 import pandas as pd
 from collections import defaultdict
 
-tree_file = Path(sys.argv[1])
-nodes_info_file = Path(sys.argv[2])
-clade_file = Path(sys.argv[3])
-clustered_tsv = Path(sys.argv[4])
-results_dir = Path(sys.argv[5])
+tree_file = Path(os.environ.get('TREE_FILE', ''))
+nodes_info_file = Path(os.environ.get('NODES_INFO', ''))
+clade_file = Path(os.environ.get('CLADE_ASSIGN', ''))
+clustered_tsv = Path(os.environ.get('CLUSTERED_HTT_TSV', ''))
+results_dir = Path(os.environ.get('RESULTS', ''))
 
 map_file = results_dir / "network" / "community_to_component.tsv"
 out_events = results_dir / "events"
@@ -154,16 +215,15 @@ out_events.mkdir(parents=True, exist_ok=True)
 out_trees.mkdir(parents=True, exist_ok=True)
 out_summary.mkdir(parents=True, exist_ok=True)
 
-# Try to import ete3
+# try to import ete3
 try:
     from ete3 import Tree
     HAS_ETE3 = True
 except ImportError:
     HAS_ETE3 = False
     print("WARNING: ete3 not available. Tree trimming will be skipped.")
-    print("Install with: conda install -c etetoolkit ete3")
 
-# --- Load clade map: genome -> clade
+# load clade map: genome -> clade
 clade_map = {}
 with open(clade_file) as f:
     header = f.readline().strip().split("\t")
@@ -176,15 +236,13 @@ with open(clade_file) as f:
         clade = fields[col.get("clade", 1)]
         clade_map[sample] = clade
 
-# --- Load species tree
+# load species tree
 if HAS_ETE3:
-    # Read tree and simplify tip labels
     tree_str = tree_file.read_text().strip()
     full_tree = Tree(tree_str, format=1)
     
-    # Simplify tip names to match clade_map keys
+    # simplify tip names to match clade_map keys
     for leaf in full_tree.iter_leaves():
-        # Remove _1_AssemblyScaffolds... suffix
         simple_name = leaf.name.split("_1_AssemblyScaffolds")[0]
         if simple_name.endswith("_1"):
             simple_name = simple_name[:-2]
@@ -192,16 +250,15 @@ if HAS_ETE3:
     
     print(f"Loaded tree with {len(full_tree)} leaves")
 
-# --- Load nodes_info
+# load nodes_info
 nodes_info = json.loads(nodes_info_file.read_text())
 
-# Build node_to_clades sets
+# build node_to_clades sets
 node_to_clades = {}
 node_size = {}
 for node in nodes_info:
     clades = set()
     for leaf in node["all_leaves"]:
-        # Simplify leaf name
         simple_leaf = leaf.split("_1_AssemblyScaffolds")[0]
         if simple_leaf.endswith("_1"):
             simple_leaf = simple_leaf[:-2]
@@ -216,7 +273,7 @@ def find_mrca_node(c1, c2):
         return None
     return min(candidates, key=lambda n: node_size[n])
 
-# --- Load HTT candidates with community assignments
+# load HTT candidates with community assignments
 df = pd.read_csv(clustered_tsv, sep="\t")
 required = {"community_id","qseqid","sseqid","qclade","sclade"}
 missing = required - set(df.columns)
@@ -227,7 +284,7 @@ df["qclade"] = df["qclade"].astype(str)
 df["sclade"] = df["sclade"].astype(str)
 df["community_id"] = df["community_id"].astype(str)
 
-# Add component assignment
+# add component assignment
 mp = pd.read_csv(map_file, sep="\t")
 mp["community_id"] = mp["community_id"].astype(str)
 df = df.merge(mp[["community_id","component_id"]], on="community_id", how="left")
@@ -237,7 +294,7 @@ if df["component_id"].isna().any():
     print(f"WARNING: {n_missing} rows without component assignment")
     df = df[df["component_id"].notna()].copy()
 
-# Deduplicate to unique community entries per clade pair
+# deduplicate to unique community entries per clade pair
 df_comm = df.drop_duplicates(subset=["community_id","qclade","sclade"]).copy()
 
 def norm_pair(a,b):
@@ -245,7 +302,7 @@ def norm_pair(a,b):
 
 df_comm["clade_pair"] = [norm_pair(a,b) for a,b in zip(df_comm["qclade"], df_comm["sclade"])]
 
-# --- Per component: trim tree and count minimal events
+# per component: trim tree and count minimal events
 component_rows = []
 node_event_counts = defaultdict(int)
 total_components = df_comm["component_id"].nunique()
@@ -256,25 +313,23 @@ for comp_idx, (comp_id, sub) in enumerate(df_comm.groupby("component_id")):
     if (comp_idx + 1) % 100 == 0:
         print(f"  Processed {comp_idx + 1}/{total_components} components")
     
-    # Get all clades in this component
+    # get all clades in this component
     clades_in_component = set(sub["qclade"]).union(set(sub["sclade"]))
     
-    # Get all genomes (samples) belonging to these clades
+    # get all genomes (samples) belonging to these clades
     samples_in_component = set()
     for sample, clade in clade_map.items():
         if clade in clades_in_component:
             samples_in_component.add(sample)
     
-    # Also add clades that are their own samples (uncollapsed)
+    # also add clades that are their own samples (uncollapsed)
     for clade in clades_in_component:
         if clade not in [c for c in clade_map.values()]:
-            # This clade might be a sample name itself
             samples_in_component.add(clade)
     
-    # Trim tree to only these samples (if ete3 available)
+    # trim tree to only these samples (if ete3 available)
     if HAS_ETE3 and len(samples_in_component) >= 2:
         try:
-            # Find leaves that match our samples
             leaves_to_keep = []
             for leaf in full_tree.iter_leaves():
                 if leaf.name in samples_in_component:
@@ -284,17 +339,17 @@ for comp_idx, (comp_id, sub) in enumerate(df_comm.groupby("component_id")):
                 trimmed = full_tree.copy()
                 trimmed.prune(leaves_to_keep, preserve_branch_length=True)
                 
-                # Save trimmed tree (optional, for large datasets might skip)
-                if total_components <= 1000:  # Only save for manageable number
+                # save trimmed tree (only for manageable number of components)
+                if total_components <= 1000:
                     tree_path = out_trees / f"{comp_id}.nwk"
                     trimmed.write(outfile=str(tree_path))
-        except Exception as e:
-            pass  # Tree trimming failed, continue with node-based approach
+        except Exception:
+            pass
     
-    # Count events per clade pair
+    # count events per clade pair
     pair_to_k = sub.groupby("clade_pair")["community_id"].nunique().to_dict()
     
-    # Map each clade pair to MRCA node
+    # map each clade pair to MRCA node
     node_to_pairs = defaultdict(list)
     for (a,b), k in pair_to_k.items():
         mrca = find_mrca_node(a, b)
@@ -302,9 +357,7 @@ for comp_idx, (comp_id, sub) in enumerate(df_comm.groupby("component_id")):
             continue
         node_to_pairs[mrca].append(((a,b), k))
     
-    # Apply parsimony rule at each node:
-    # - If only one clade pair at this node: count its k
-    # - If >1 distinct clade pairs: count 1 (but never below max k)
+    # apply parsimony rule at each node
     comp_min = 0
     pernode = []
     for node, pairs in node_to_pairs.items():
@@ -314,8 +367,7 @@ for comp_idx, (comp_id, sub) in enumerate(df_comm.groupby("component_id")):
         if distinct_pairs == 1:
             cnt = ks[0]
         else:
-            # Multiple different clade pairs at same node = likely single ancestral transfer
-            # But if one pair has multiple independent transfers (k>1), keep that
+            # multiple different clade pairs at same node = likely single ancestral transfer
             cnt = max(1, max(ks))
         
         comp_min += cnt
@@ -330,13 +382,13 @@ for comp_idx, (comp_id, sub) in enumerate(df_comm.groupby("component_id")):
         "min_events_component": comp_min
     })
     
-    # Write per-component per-node breakdown (for debugging/analysis)
+    # write per-component per-node breakdown
     if pernode:
         pd.DataFrame(pernode, columns=["node","n_pairs_at_node","max_k_samepair","events_counted"]).to_csv(
             out_events / f"{comp_id}_per_node.tsv", sep="\t", index=False
         )
 
-# --- Write summaries
+# write summaries
 comp_df = pd.DataFrame(component_rows).sort_values("min_events_component", ascending=False)
 comp_df.to_csv(out_summary / "minimal_events_by_component.tsv", sep="\t", index=False)
 
@@ -365,24 +417,38 @@ Component size distribution:
 (out_summary / "minimal_events_summary.txt").write_text(summary_text)
 (out_summary / "minimal_events_total.txt").write_text(f"Minimal HTT events (sum over components): {total_min}\n")
 
-print("\nWrote:")
-print(" -", out_summary / "minimal_events_by_component.tsv")
-print(" -", out_summary / "minimal_events_by_node.tsv")
-print(" -", out_summary / "minimal_events_summary.txt")
-print(" -", out_summary / "minimal_events_total.txt")
-print("")
-print(f"TOTAL minimal HTT events: {total_min}")
-PY
+print(f"\nWrote: {out_summary / 'minimal_events_by_component.tsv'}")
+print(f"Wrote: {out_summary / 'minimal_events_by_node.tsv'}")
+print(f"Wrote: {out_summary / 'minimal_events_summary.txt'}")
+print(f"Wrote: {out_summary / 'minimal_events_total.txt'}")
+print(f"\nTOTAL minimal HTT events: {total_min}")
+EOF
+
+echo ""
+echo "STEP 2 complete."
 
 conda deactivate
 
+
+
+### ===========================================================================
+### FINISH
+### ===========================================================================
+END_TIME=$(date +%s)
+ELAPSED=$((END_TIME - START_TIME))
 echo ""
-echo "### 08_minimal_htt_events finished: $(date)"
-echo "Outputs:"
-echo "  ${RESULTS}/network/community_to_component.tsv"
-echo "  ${RESULTS}/network/component_sizes.tsv"
-echo "  ${RESULTS}/trimmed_trees/  (if ete3 available)"
-echo "  ${RESULTS}/events/  (per-component breakdowns)"
-echo "  ${RESULTS}/summary/minimal_events_by_component.tsv"
-echo "  ${RESULTS}/summary/minimal_events_by_node.tsv"
-echo "  ${RESULTS}/summary/minimal_events_total.txt"
+echo "=========================================="
+echo "Pipeline complete!"
+echo "Total runtime: $((ELAPSED / 3600))h $(((ELAPSED % 3600) / 60))m $((ELAPSED % 60))s"
+echo "=========================================="
+echo ""
+echo "Output files:"
+echo "  Community to component:     ${RESULTS}/network/community_to_component.tsv"
+echo "  Component sizes:            ${RESULTS}/network/component_sizes.tsv"
+echo "  Trimmed trees:              ${RESULTS}/trimmed_trees/"
+echo "  Per-component events:       ${RESULTS}/events/"
+echo "  Events by component:        ${RESULTS}/summary/minimal_events_by_component.tsv"
+echo "  Events by node:             ${RESULTS}/summary/minimal_events_by_node.tsv"
+echo "  Summary:                    ${RESULTS}/summary/minimal_events_summary.txt"
+echo "  Total events:               ${RESULTS}/summary/minimal_events_total.txt"
+echo ""

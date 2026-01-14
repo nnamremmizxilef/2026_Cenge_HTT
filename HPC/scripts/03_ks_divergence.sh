@@ -5,14 +5,21 @@ ROOT=/path/to/HTT
 TREE_RESULTS=${ROOT}/results/01_results_phylo_tree
 RESULTS=${ROOT}/results/03_results_ks_divergence
 LOGS=${ROOT}/logs/03_logs_ks_divergence
-BUSCO_RUNS_DIR=${TREE_RESULTS}/busco_runs
 
-# input files
+### input files from 01_phylo_tree.sh
 TREE_FILE=${TREE_RESULTS}/phylogeny_rooted.treefile
 BUSCO_SEQUENCES_DIR=${TREE_RESULTS}/sequences
+BUSCO_RUNS_DIR=${TREE_RESULTS}/busco_runs
 
-### define outgroup (same as phylogenetic analysis)
+### define outgroup for tree rooting
+# IMPORTANT:
+# The outgroup name must EXACTLY match the genome identifier as provided in 01_phylo_tree.sh.
+# Users MUST update this value to reflect the actual outgroup in their analysis.
 OUTGROUP="PsefloM405_1_AssemblyScaffolds_2024-02-18"
+
+### Ks filtering parameters
+# Minimum number of genes required per node for statistics
+MIN_GENES=5
 
 
 
@@ -34,8 +41,9 @@ echo "########## End of job script ##########"
 
 
 ### environment setup
-export LANG=C
-export LC_ALL=C
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
+export LANGUAGE=C
 export PYTHONWARNINGS="ignore::FutureWarning"
 
 eval "$(conda shell.bash hook)"
@@ -48,32 +56,40 @@ START_TIME=$(date +%s)
 
 
 ### info
-echo "Running on HYPERION - Date: $(date)"
+echo "Running Date: $(date)"
 echo "Tree file: ${TREE_FILE}"
 echo "BUSCO sequences: ${BUSCO_SEQUENCES_DIR}"
 echo "BUSCO runs: ${BUSCO_RUNS_DIR}"
 echo "Results directory: ${RESULTS}"
 echo "Outgroup: ${OUTGROUP}"
+echo "Minimum genes per node: ${MIN_GENES}"
 
 
 
 ### sanity checks
 if [ ! -f "${TREE_FILE}" ]; then
     echo "ERROR: Tree file not found: ${TREE_FILE}"
+    echo "Run 01_phylo_tree.sh first"
     exit 1
 fi
 
 if [ ! -d "${BUSCO_SEQUENCES_DIR}" ]; then
     echo "ERROR: BUSCO sequences directory not found: ${BUSCO_SEQUENCES_DIR}"
+    echo "Run 01_phylo_tree.sh first"
     exit 1
 fi
 
 if [ ! -d "${BUSCO_RUNS_DIR}" ]; then
     echo "ERROR: BUSCO runs directory not found: ${BUSCO_RUNS_DIR}"
+    echo "Run 01_phylo_tree.sh first"
     exit 1
 fi
 
 BUSCO_GENES_COUNT=$(ls -1 "${BUSCO_SEQUENCES_DIR}"/*.faa 2>/dev/null | wc -l)
+if [ "${BUSCO_GENES_COUNT}" -eq 0 ]; then
+    echo "ERROR: No .faa files found in ${BUSCO_SEQUENCES_DIR}"
+    exit 1
+fi
 echo "Found ${BUSCO_GENES_COUNT} BUSCO genes for analysis"
 
 
@@ -85,28 +101,35 @@ echo ""
 echo "### STEP 1: Parsing phylogenetic tree ###"
 echo ""
 
+conda deactivate
 conda activate HTT_python_ete3
 
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "Python version: $(python --version)"
+echo "ete3 version: $(python -c 'import ete3; print(ete3.__version__)')"
 
-python3 << EOF
+export TREE_FILE RESULTS OUTGROUP
+
+python3 << 'EOF'
+import os
 import sys
 from pathlib import Path
 from ete3 import Tree
 import json
 
-tree_file = Path("${TREE_FILE}")
-results_dir = Path("${RESULTS}")
-outgroup = "${OUTGROUP}"
+tree_file = Path(os.environ.get('TREE_FILE', ''))
+results_dir = Path(os.environ.get('RESULTS', '.'))
+outgroup = os.environ.get('OUTGROUP', '')
 
 tree = Tree(str(tree_file), format=1)
 
+# root tree with outgroup if present
 if outgroup in [leaf.name for leaf in tree.get_leaves()]:
     outgroup_node = tree.search_nodes(name=outgroup)[0]
     tree.set_outgroup(outgroup_node)
-    print("Tree rooted with outgroup: " + outgroup)
+    print(f"Tree rooted with outgroup: {outgroup}")
 else:
-    print("Warning: Outgroup " + outgroup + " not found, assuming tree is already rooted")
+    print(f"Warning: Outgroup {outgroup} not found, assuming tree is already rooted")
 
 nodes_info = []
 node_counter = 0
@@ -114,17 +137,18 @@ node_counter = 0
 for node in tree.traverse():
     if not node.is_leaf() and len(node.get_leaves()) > 1:
         node_counter += 1
-        node_name = "node_" + str(node_counter)
+        node_name = f"node_{node_counter}"
         
         daughter_clades = []
         for child in node.get_children():
             clade_leaves = [leaf.name for leaf in child.get_leaves()]
             daughter_clades.append(clade_leaves)
         
+        # skip outgroup split (single outgroup vs rest)
         if len(daughter_clades) == 2 and any(outgroup in clade for clade in daughter_clades):
             outgroup_clade = [clade for clade in daughter_clades if outgroup in clade][0]
             if len(outgroup_clade) == 1:
-                print("Skipping outgroup split: " + node_name)
+                print(f"Skipping outgroup split: {node_name}")
                 continue
         
         nodes_info.append({
@@ -134,15 +158,15 @@ for node in tree.traverse():
             'all_leaves': [leaf.name for leaf in node.get_leaves()]
         })
         
-        print("Node " + node_name + ": " + str(len(daughter_clades)) + " daughter clades, " + str(len(node.get_leaves())) + " total leaves")
+        print(f"Node {node_name}: {len(daughter_clades)} daughter clades, {len(node.get_leaves())} total leaves")
 
-print("Found " + str(len(nodes_info)) + " internal nodes for Ks analysis")
+print(f"Found {len(nodes_info)} internal nodes for Ks analysis")
 
 nodes_file = results_dir / "node_analyses" / "nodes_info.json"
 with open(nodes_file, 'w') as f:
     json.dump(nodes_info, f, indent=2)
 
-print("Node information saved to: " + str(nodes_file))
+print(f"Node information saved to: {nodes_file}")
 EOF
 
 if [ $? -ne 0 ]; then
@@ -150,34 +174,42 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo ""
 echo "STEP 1 complete."
+
 conda deactivate
 
 
 
 ### ===========================================================================
-### STEP 2: For each node, select representative genes
+### STEP 2: Select representative genes for each node
 ### ===========================================================================
 echo ""
-echo "### STEP 2: Selecting representative genes ###"
+echo "### STEP 2: Selecting representative genes per node ###"
 echo ""
 
 conda activate HTT_python_ete3
 
-python3 << EOF
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "Python version: $(python --version)"
+
+export RESULTS BUSCO_SEQUENCES_DIR
+
+python3 << 'EOF'
+import os
 import json
 import random
 from pathlib import Path
 
-results_dir = Path("${RESULTS}")
-busco_dir = Path("${BUSCO_SEQUENCES_DIR}")
+results_dir = Path(os.environ.get('RESULTS', '.'))
+busco_dir = Path(os.environ.get('BUSCO_SEQUENCES_DIR', ''))
 
 nodes_file = results_dir / "node_analyses" / "nodes_info.json"
 with open(nodes_file) as f:
     nodes_info = json.load(f)
 
 available_genes = [f.stem for f in busco_dir.glob("*.faa")]
-print("Available BUSCO genes: " + str(len(available_genes)))
+print(f"Available BUSCO genes: {len(available_genes)}")
 
 node_gene_pairs = []
 
@@ -185,11 +217,12 @@ for node_info in nodes_info:
     node_name = node_info['node_name']
     daughter_clades = node_info['daughter_clades']
     
-    print("Processing " + node_name + " with " + str(len(daughter_clades)) + " daughter clades")
+    print(f"Processing {node_name} with {len(daughter_clades)} daughter clades")
     
     for gene in available_genes:
-        gene_file = busco_dir / (gene + ".faa")
+        gene_file = busco_dir / f"{gene}.faa"
         
+        # parse sequences
         sequences = {}
         current_seq = ""
         current_name = ""
@@ -206,14 +239,16 @@ for node_info in nodes_info:
             if current_name:
                 sequences[current_name] = current_seq
         
+        # select one representative per daughter clade
         representatives = []
         
-        for i, clade in enumerate(daughter_clades):
+        for clade in daughter_clades:
             clade_seqs = {name: seq for name, seq in sequences.items() if name in clade}
             
             if not clade_seqs:
                 break
             
+            # select longest sequence (random tiebreaker)
             best_name = max(clade_seqs.keys(), key=lambda x: (len(clade_seqs[x]), random.random()))
             representatives.append((best_name, clade_seqs[best_name]))
         
@@ -224,13 +259,13 @@ for node_info in nodes_info:
                 'representatives': representatives
             })
 
-print("Total node-gene pairs for analysis: " + str(len(node_gene_pairs)))
+print(f"Total node-gene pairs for analysis: {len(node_gene_pairs)}")
 
 pairs_file = results_dir / "node_analyses" / "node_gene_pairs.json"
 with open(pairs_file, 'w') as f:
     json.dump(node_gene_pairs, f, indent=2)
 
-print("Node-gene pairs saved to: " + str(pairs_file))
+print(f"Node-gene pairs saved to: {pairs_file}")
 EOF
 
 if [ $? -ne 0 ]; then
@@ -238,7 +273,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo ""
 echo "STEP 2 complete."
+
 conda deactivate
 
 
@@ -253,20 +290,24 @@ echo ""
 conda activate HTT_mafft
 
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "MAFFT version: $(mafft --version 2>&1 | head -1)"
 
-python3 << EOF
+export RESULTS
+
+python3 << 'EOF'
+import os
 import json
 import subprocess
 from pathlib import Path
 
-results_dir = Path("${RESULTS}")
+results_dir = Path(os.environ.get('RESULTS', '.'))
 pairs_file = results_dir / "node_analyses" / "node_gene_pairs.json"
 alignments_dir = results_dir / "alignments"
 
 with open(pairs_file) as f:
     node_gene_pairs = json.load(f)
 
-print("Creating alignments for " + str(len(node_gene_pairs)) + " node-gene pairs")
+print(f"Creating alignments for {len(node_gene_pairs)} node-gene pairs")
 
 success_count = 0
 for i, pair in enumerate(node_gene_pairs):
@@ -275,14 +316,14 @@ for i, pair in enumerate(node_gene_pairs):
     representatives = pair['representatives']
     
     if (i + 1) % 500 == 0:
-        print("Progress: " + str(i + 1) + "/" + str(len(node_gene_pairs)))
+        print(f"Progress: {i + 1}/{len(node_gene_pairs)}")
     
-    input_file = alignments_dir / (node_name + "_" + gene + "_input.faa")
+    input_file = alignments_dir / f"{node_name}_{gene}_input.faa"
     with open(input_file, 'w') as f:
         for name, seq in representatives:
-            f.write(">" + name + "\n" + seq + "\n")
+            f.write(f">{name}\n{seq}\n")
     
-    output_file = alignments_dir / (node_name + "_" + gene + "_aligned.faa")
+    output_file = alignments_dir / f"{node_name}_{gene}_aligned.faa"
     
     try:
         with open(output_file, 'w') as out:
@@ -299,7 +340,7 @@ for i, pair in enumerate(node_gene_pairs):
             input_file.unlink()
         continue
 
-print("Protein alignments complete: " + str(success_count) + " successful")
+print(f"Protein alignments complete: {success_count} successful")
 EOF
 
 if [ $? -ne 0 ]; then
@@ -307,13 +348,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo ""
 echo "STEP 3 complete."
+
 conda deactivate
 
 
 
 ### ===========================================================================
-### STEP 4: Get nucleotide sequences from BUSCO and create codon alignments
+### STEP 4: Create codon alignments with PAL2NAL
 ### ===========================================================================
 echo ""
 echo "### STEP 4: Creating codon alignments with PAL2NAL ###"
@@ -322,27 +365,30 @@ echo ""
 conda activate HTT_pal2nal
 
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
-which pal2nal.pl
+echo "PAL2NAL location: $(which pal2nal.pl)"
 
-python3 << EOF
+export RESULTS BUSCO_RUNS_DIR
+
+python3 << 'EOF'
+import os
 import json
 import subprocess
 from pathlib import Path
 
-results_dir = Path("${RESULTS}")
+results_dir = Path(os.environ.get('RESULTS', '.'))
 pairs_file = results_dir / "node_analyses" / "node_gene_pairs.json"
 alignments_dir = results_dir / "alignments"
 codon_dir = results_dir / "codon_alignments"
-busco_runs_dir = Path("${BUSCO_RUNS_DIR}")
+busco_runs_dir = Path(os.environ.get('BUSCO_RUNS_DIR', ''))
 
 codon_dir.mkdir(exist_ok=True)
 
 with open(pairs_file) as f:
     node_gene_pairs = json.load(f)
 
-print("Processing " + str(len(node_gene_pairs)) + " node-gene pairs for codon alignments")
+print(f"Processing {len(node_gene_pairs)} node-gene pairs for codon alignments")
 
-# Build mapping: sample_name -> path to single_copy_busco_sequences (dothideomycetes)
+# build mapping: sample_name -> path to single_copy_busco_sequences (dothideomycetes)
 sample_busco_dirs = {}
 for busco_dir in busco_runs_dir.glob("*_dothideomycetes_odb10"):
     sample_name = busco_dir.name.replace("_dothideomycetes_odb10", "")
@@ -350,10 +396,10 @@ for busco_dir in busco_runs_dir.glob("*_dothideomycetes_odb10"):
     if seq_dir.exists():
         sample_busco_dirs[sample_name] = seq_dir
 
-print("Found " + str(len(sample_busco_dirs)) + " samples with BUSCO nucleotide sequences")
+print(f"Found {len(sample_busco_dirs)} samples with BUSCO nucleotide sequences")
 
 def read_fasta_first_seq(filepath):
-    """Read first sequence from fasta file"""
+    """Read first sequence from fasta file."""
     seq = ""
     with open(filepath) as f:
         for line in f:
@@ -373,14 +419,14 @@ for i, pair in enumerate(node_gene_pairs):
     representatives = pair['representatives']
     
     if (i + 1) % 500 == 0:
-        print("Progress: " + str(i + 1) + "/" + str(len(node_gene_pairs)) + " (success: " + str(successful_pairs) + ")")
+        print(f"Progress: {i + 1}/{len(node_gene_pairs)} (success: {successful_pairs})")
     
-    protein_alignment_file = alignments_dir / (node_name + "_" + gene + "_aligned.faa")
+    protein_alignment_file = alignments_dir / f"{node_name}_{gene}_aligned.faa"
     if not protein_alignment_file.exists():
         failed_pairs += 1
         continue
     
-    # Get nucleotide sequences
+    # get nucleotide sequences
     nuc_sequences = {}
     all_found = True
     
@@ -389,7 +435,7 @@ for i, pair in enumerate(node_gene_pairs):
             all_found = False
             break
         
-        nuc_file = sample_busco_dirs[rep_name] / (gene + ".fna")
+        nuc_file = sample_busco_dirs[rep_name] / f"{gene}.fna"
         if not nuc_file.exists():
             all_found = False
             break
@@ -405,13 +451,13 @@ for i, pair in enumerate(node_gene_pairs):
         failed_pairs += 1
         continue
     
-    # Write nucleotide sequences with headers matching protein alignment
-    nuc_temp_file = codon_dir / (node_name + "_" + gene + "_nuc.fasta")
+    # write nucleotide sequences
+    nuc_temp_file = codon_dir / f"{node_name}_{gene}_nuc.fasta"
     with open(nuc_temp_file, 'w') as f:
         for name, seq in nuc_sequences.items():
-            f.write(">" + name + "\n" + seq + "\n")
+            f.write(f">{name}\n{seq}\n")
     
-    codon_alignment_file = codon_dir / (node_name + "_" + gene + "_codon_aligned.fasta")
+    codon_alignment_file = codon_dir / f"{node_name}_{gene}_codon_aligned.fasta"
     
     try:
         with open(codon_alignment_file, 'w') as out:
@@ -438,8 +484,8 @@ for i, pair in enumerate(node_gene_pairs):
         nuc_temp_file.unlink()
 
 print("")
-print("Successfully created " + str(successful_pairs) + " codon alignments")
-print("Failed: " + str(failed_pairs))
+print(f"Successfully created {successful_pairs} codon alignments")
+print(f"Failed: {failed_pairs}")
 EOF
 
 if [ $? -ne 0 ]; then
@@ -447,29 +493,34 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo ""
 echo "STEP 4 complete."
+
 conda deactivate
 
 
 
 ### ===========================================================================
-### STEP 5: Calculate Ks values with R seqinr
+### STEP 5: Calculate Ks values
 ### ===========================================================================
 echo ""
-echo "### STEP 5: Calculating Ks values ###"
+echo "### STEP 5: Calculating Ks values with seqinr ###"
 echo ""
 
 conda activate HTT_r
 
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+echo "R version: $(R --version | head -1)"
 
-Rscript --vanilla - << EOF
+Rscript --vanilla << EOF
 library(seqinr)
 library(jsonlite)
 
 results_dir <- "${RESULTS}"
 codon_dir <- file.path(results_dir, "codon_alignments")
 ks_dir <- file.path(results_dir, "ks_calculations")
+min_genes <- ${MIN_GENES}
+
 dir.create(ks_dir, showWarnings = FALSE)
 
 codon_files <- list.files(codon_dir, pattern = "_codon_aligned.fasta\$", full.names = TRUE)
@@ -497,7 +548,6 @@ for (i in seq_along(codon_files)) {
         if (length(alignment\$seq) == 2) {
             ks_result <- kaks(alignment)
             
-            # Coerce to plain numeric (avoid 'dist' objects in JSON)
             ks_value <- as.numeric(ks_result\$ks)[1]
             ka_value <- as.numeric(ks_result\$ka)[1]
             
@@ -531,7 +581,7 @@ if (length(ks_results) == 0) {
 ks_file <- file.path(ks_dir, "ks_values.json")
 write_json(ks_results, ks_file, pretty = TRUE)
 
-# Calculate node-level statistics
+# calculate node-level statistics
 node_stats <- list()
 
 for (result in ks_results) {
@@ -551,16 +601,16 @@ node_summary <- list()
 for (node in names(node_stats)) {
     ks_values <- node_stats[[node]]
     
-    if (length(ks_values) >= 5) {
+    if (length(ks_values) >= min_genes) {
         node_summary[[node]] <- list(
-            n_genes        = length(ks_values),
-            ks_mean        = mean(ks_values),
-            ks_median      = median(ks_values),
+            n_genes         = length(ks_values),
+            ks_mean         = mean(ks_values),
+            ks_median       = median(ks_values),
             ks_0.5_quantile = as.numeric(quantile(ks_values, 0.005)),
             ks_1_quantile   = as.numeric(quantile(ks_values, 0.01)),
             ks_5_quantile   = as.numeric(quantile(ks_values, 0.05)),
-            ks_min         = min(ks_values),
-            ks_max         = max(ks_values)
+            ks_min          = min(ks_values),
+            ks_max          = max(ks_values)
         )
         
         cat("Node", node, "- Genes:", length(ks_values), 
@@ -577,20 +627,21 @@ if (length(node_summary) > 0) {
     summary_df <- do.call(rbind, lapply(names(node_summary), function(node) {
         stats <- node_summary[[node]]
         data.frame(
-            node           = node,
-            n_genes        = stats\$n_genes,
-            ks_min         = stats\$ks_min,
+            node            = node,
+            n_genes         = stats\$n_genes,
+            ks_min          = stats\$ks_min,
             ks_0.5_quantile = stats\$ks_0.5_quantile,
             ks_1_quantile   = stats\$ks_1_quantile,
             ks_5_quantile   = stats\$ks_5_quantile,
-            ks_median      = stats\$ks_median,
-            ks_mean        = stats\$ks_mean,
-            ks_max         = stats\$ks_max,
+            ks_median       = stats\$ks_median,
+            ks_mean         = stats\$ks_mean,
+            ks_max          = stats\$ks_max,
             stringsAsFactors = FALSE
         )
     }))
     
-    summary_df\$pass_0.01 <- summary_df\$ks_0.5_quantile > 0.01
+    # threshold flags for HTT analysis
+    summary_df\$pass_0.01  <- summary_df\$ks_0.5_quantile > 0.01
     summary_df\$pass_0.005 <- summary_df\$ks_0.5_quantile > 0.005
     summary_df\$pass_0.001 <- summary_df\$ks_0.5_quantile > 0.001
     
@@ -601,7 +652,7 @@ if (length(node_summary) > 0) {
     print(summary_df)
 }
 
-# Save raw Ks values
+# save raw Ks values
 ks_raw_df <- do.call(rbind, lapply(names(ks_results), function(pair) {
     data.frame(
         node = ks_results[[pair]]\$node,
@@ -622,7 +673,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo ""
 echo "STEP 5 complete."
+
 conda deactivate
 
 
@@ -646,7 +699,3 @@ echo "  Codon alignments:     ${RESULTS}/codon_alignments/"
 echo "  Ks values (JSON):     ${RESULTS}/ks_calculations/ks_values.json"
 echo "  Ks by node (TSV):     ${RESULTS}/ks_calculations/ks_values_by_node.tsv"
 echo "  Node Ks summary:      ${RESULTS}/ks_calculations/node_ks_summary.tsv"
-echo ""
-echo "Transfer to local machine for visualization:"
-echo "ks_values_by_node.tsv & node_ks_summary.tsv & nodes_info.json"
-echo ""

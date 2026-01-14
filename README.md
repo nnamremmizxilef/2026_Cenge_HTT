@@ -1,9 +1,8 @@
 # Horizontal transfer of transposable elements across lineages of an ectomycorrhizal fungal species complex
 
+This repository contains scripts, software environment definitions, and directory structure required to reproduce the analyses presented in:
 
-This repository contains all scripts, software environment definitions, and directory structure required to reproduce the analyses presented in:
-
-> **...**  
+> **...**
 
 ---
 
@@ -26,8 +25,6 @@ Together, our results demonstrate that horizontal transfer of transposable eleme
 │   └── scripts/                 # Shell / batch scripts for HPC execution
 │
 ├── R/                           # Local R-based analyses
-│   ├── data/                    # Inputs for R scripts (derived from HPC results)
-│   ├── results/                 # Tables and figures generated in R
 │   ├── scripts/                 # R analysis scripts
 │   └── HTT.Rproj                # RStudio project file
 │
@@ -48,20 +45,40 @@ The analysis consists of two components:
 
 ---
 
+## Figure Reproducibility and Workflow Dependencies
+
+All figures and tables presented in the associated publication can be reproduced by running the R scripts provided in this repository using the archived input data available on Zenodo.
+
+Specifically:
+- The R-based analyses (`R/scripts/`) generate all figures and summary tables used in the manuscript.
+- These scripts can be run locally without access to an HPC system, provided that the required input data are placed in `R/data/` as described above.
+
+The HPC-based pipeline is required **only** to regenerate the intermediate input files consumed by the R scripts (e.g. phylogenies, divergence estimates, transposable element annotations, and HTT candidate tables). Users who wish to inspect or modify the upstream analyses may rerun the HPC pipeline; otherwise, this step is not necessary for reproducing the published figures.
+
+This separation allows full reproduction of all figures on standard desktop or laptop systems while retaining the ability to recompute all upstream analyses when needed.
+
+---
+
 ## HPC: Cluster-Based Analyses
+
+### Clone the repository on the HPC
+
+```bash
+git clone https://github.com/USERNAME/2026_Cenge_HTT.git
+cd 2026_Cenge_HTT/HPC
+```
 
 ### Setup
 
-From the repository root:
+From `2026_Cenge_HTT/HPC` run:
 
 ```bash
-cd HPC
 bash scripts/00_setup.sh
 ```
 
 This will:
-- Create all required Conda environments
-- Initialize directory structure for logs and results
+- Create all required Conda environments from `HPC/envs/*.yml`
+- Initialize directory structure under `HPC/` for `data/`, `databases/`, `logs/`, and `results/`
 
 ### Execution
 
@@ -77,10 +94,17 @@ Scripts are intended for submission to a job scheduler (e.g. SLURM). Scheduler d
 
 ## R: Local Analyses
 
+### Clone the repository locally
+
+```bash
+git clone https://github.com/USERNAME/2026_Cenge_HTT.git
+cd 2026_Cenge_HTT/R
+```
+
 Open the RStudio project:
 
 ```
-R/HTT.Rproj
+HTT.Rproj
 ```
 
 Run scripts in `R/scripts/` in numerical order.  
@@ -94,34 +118,33 @@ Several analyses in this pipeline rely on external databases that are not distri
 
 ### Pfam
 
-The Pfam protein domain database is used for domain-based annotation of transposable element proteins.
+Pfam protein domain database (Pfam-A HMMs):
 
-Users should download an appropriate Pfam release (e.g. Pfam-A HMMs) from:
 https://ftp.ebi.ac.uk/pub/databases/Pfam/
 
-After download, the database must be prepared for use with HMMER (e.g. using `hmmpress`).
+After download, the database should be prepared for HMMER (e.g. `hmmpress`).
 
 ### CDD (Conserved Domain Database)
 
-The NCBI Conserved Domain Database (CDD) is used for complementary protein domain annotation and classification.
+NCBI Conserved Domain Database:
 
-CDD data can be obtained from:
 https://www.ncbi.nlm.nih.gov/Structure/cdd/cdd.shtml
 
 Depending on the analysis step, users may need either the CDD PSSMs or a locally formatted database compatible with RPS-BLAST or related tools.
 
 ### EarlGrey Databases
 
-Transposable element annotation using **EarlGrey** requires additional reference databases to be installed and properly configured. These typically include repeat libraries and auxiliary databases required by the underlying tools invoked by EarlGrey.
+Transposable element annotation using **EarlGrey** requires additional reference databases (repeat libraries and auxiliary databases). Follow the official EarlGrey documentation:
 
-Users should follow the official EarlGrey documentation for database installation and setup:
 https://github.com/TobyBaril/EarlGrey
 
-All required databases must be downloaded and indexed prior to running EarlGrey-based annotation steps. Paths to these databases are specified within the corresponding HPC scripts and may need to be adapted to local system layouts.
+### BUSCO databases
+
+BUSCO lineage datasets must be installed locally. The `busco_downloads/` directory should contain the lineage datasets referenced in the manuscript (directory names matching the lineages used in the analyses).
 
 ### Database Location and Configuration
 
-The pipeline assumes that Pfam, CDD, and EarlGrey-related databases are available locally and accessible to the relevant HPC scripts. Database paths are defined within the scripts or configuration sections and should be adjusted as needed.
+The pipeline assumes that Pfam, CDD, EarlGrey-related databases, and BUSCO lineage datasets are available locally and accessible to the relevant HPC scripts. Database paths are defined within scripts or configuration sections and should be adjusted as needed.
 
 A typical local directory structure may resemble:
 
@@ -129,45 +152,45 @@ A typical local directory structure may resemble:
 databases/
 ├── pfam/
 ├── cdd/
-└── earlgrey/
+├── earlgrey/
+└── busco_downloads/
 ```
 
-Users running the pipeline on shared HPC systems may alternatively point to centrally maintained database installations.
-
-### Reproducibility Note
-
-Exact database versions and releases used in the original analysis are documented in the associated Zenodo archive and/or supplementary materials. For full reproducibility, users are encouraged to use the same database versions where possible.
+Users running the pipeline on shared HPC systems may alternatively point to centrally maintained database installations by updating the corresponding path variables in the scripts.
 
 ---
 
-## Data and Results Availability
+## Data and Results Availability (Zenodo)
 
-Due to size constraints, large input data and intermediate/results files are not stored directly in this GitHub repository. These data are archived on Zenodo in two complementary records corresponding to the two components of the workflow.
+Large input data and intermediate/results files are not stored directly in this GitHub repository. These data are archived on Zenodo in two records corresponding to the two components of the workflow.
 
-### HPC Data and Results
-
-All data required to run or inspect the cluster-based analyses (including intermediate files and results generated on the HPC system) are archived on Zenodo:
+### HPC Data (`data_hpc.zip`)
 
 🔗 https://doi.org/XXXX.XXXX/zenodo.HPC_DOI
 
-This archive corresponds to the directory structure expected by the scripts in `HPC/`. After downloading, the contents should be placed into the `HPC/` directory as indicated in the archive README.
+After downloading and extracting `data_hpc.zip`, place its contents into:
 
-### R Data and Results
+```
+2026_Cenge_HTT/
+└── HPC/
+    └── data/
+        └── (contents of data_hpc.zip)
+```
 
-All input data and results used for downstream statistical analyses and figure generation in R are archived separately on Zenodo:
+### R Data (`data_R.zip`)
 
 🔗 https://doi.org/XXXX.XXXX/zenodo.R_DOI
 
-This archive corresponds to the `R/data/` and `R/results/` directories. After downloading, users should place the archived contents into the respective directories before running the R scripts.
+After downloading and extracting `data_R.zip`, place its contents into:
 
-### Relationship Between GitHub and Zenodo Archives
+```
+2026_Cenge_HTT/
+└── R/
+    └── data/
+        └── (contents of data_R.zip)
+```
 
-The GitHub repository contains all scripts, software environment definitions, and directory structure required to reproduce the analyses. The Zenodo archives provide the large data files required to either:
-
-1. Reproduce all figures and tables directly from archived results, or  
-2. Inspect, validate, or extend the analyses without re-running the full HPC pipeline.
-
-Users who wish to fully recompute the analyses from raw inputs may instead follow the workflow described in the repository and obtain genome assemblies as described below.
+If the R archive also provides precomputed outputs, place them into `R/results/` as instructed in the Zenodo record.
 
 ---
 
@@ -175,7 +198,7 @@ Users who wish to fully recompute the analyses from raw inputs may instead follo
 
 - All software dependencies are defined via Conda environments
 - Analysis steps are explicitly ordered and numbered
-- Directory structure is created automatically
+- Directory structures are created automatically
 - Scripts are safe to rerun
 
 ---
