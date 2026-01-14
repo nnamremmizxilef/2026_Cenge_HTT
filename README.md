@@ -80,6 +80,27 @@ This will:
 - Create all required Conda environments from `HPC/envs/*.yml`
 - Initialize directory structure under `HPC/` for `data/`, `databases/`, `logs/`, and `results/`
 
+
+### Conda Environment Configuration (Important)
+
+The Conda environment YAML files provided in `HPC/envs/` include a `prefix:` field that specifies the installation path of each environment.
+
+The `prefix:` paths in these files are **placeholders** and must be adapted to the local system before creating the environments. Users may either:
+
+1. **Edit the `prefix:` field** in each YAML file to point to a valid Conda environment directory on their system, or  
+2. **Remove the `prefix:` field entirely**, allowing Conda (or mamba) to install the environment in its default location.
+
+For example, the following entry in a YAML file:
+
+```yaml
+prefix: /path/to/conda/envs/HTT_hmmer
+```
+
+must be replaced with an appropriate local path or removed prior to environment creation.
+
+Failure to update or remove the `prefix:` field will result in Conda attempting to install the environment into a non-existent directory.
+
+
 ### Execution
 
 HPC scripts are located in:
