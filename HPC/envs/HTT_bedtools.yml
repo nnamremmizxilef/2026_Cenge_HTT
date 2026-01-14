@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - bedtools
-prefix: /home/zimmermf/miniconda3/envs/HTT_bedtools
+prefix: /path/to/conda/envs/HTT_bedtools

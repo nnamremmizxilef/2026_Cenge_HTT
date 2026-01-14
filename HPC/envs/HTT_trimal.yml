@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - trimal=1.4.1
-prefix: /home/zimmermf/miniconda3/envs/HTT_trimal
+prefix: /path/to/conda/envs/HTT_trimal

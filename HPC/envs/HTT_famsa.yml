@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - famsa=2.2.2
-prefix: /home/zimmermf/miniconda3/envs/HTT_famsa
+prefix: /path/to/conda/envs/HTT_famsa

@@ -6,4 +6,4 @@ channels:
 dependencies:
   - biopython
   - python=3.11
-prefix: /home/zimmermf/miniconda3/envs/HTT_biopython
+prefix: /path/to/conda/envs/HTT_biopython

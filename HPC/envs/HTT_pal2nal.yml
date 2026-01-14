@@ -6,4 +6,4 @@ channels:
 dependencies:
   - pal2nal=14.0
   - parallel
-prefix: /home/zimmermf/miniconda3/envs/HTT_pal2nal
+prefix: /path/to/conda/envs/HTT_pal2nal

@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - phylorank=0.1.12
-prefix: /home/zimmermf/miniconda3/envs/HTT_phylorank
+prefix: /path/to/conda/envs/HTT_phylorank

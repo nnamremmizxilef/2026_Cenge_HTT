@@ -6,4 +6,4 @@ channels:
 dependencies:
   - busco=5.4.7
   - pandas=1.5
-prefix: /home/zimmermf/miniconda3/envs/HTT_busco
+prefix: /path/to/conda/envs/HTT_busco

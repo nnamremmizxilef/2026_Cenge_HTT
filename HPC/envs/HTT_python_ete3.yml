@@ -8,4 +8,4 @@ dependencies:
   - python=3.11
   - networkx
   - pandas
-prefix: /home/zimmermf/miniconda3/envs/HTT_python_ete3
+prefix: /path/to/conda/envs/HTT_python_ete3

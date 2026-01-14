@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - iqtree=2.2.6
-prefix: /home/zimmermf/miniconda3/envs/HTT_iqtree
+prefix: /path/to/conda/envs/HTT_iqtree

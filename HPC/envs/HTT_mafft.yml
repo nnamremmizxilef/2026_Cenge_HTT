@@ -6,4 +6,4 @@ channels:
 dependencies:
   - mafft=7.505
   - parallel
-prefix: /home/zimmermf/miniconda3/envs/HTT_mafft
+prefix: /path/to/conda/envs/HTT_mafft

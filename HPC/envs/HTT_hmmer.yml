@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - hmmer
-prefix: /home/zimmermf/miniconda3/envs/HTT_hmmer
+prefix: /path/to/conda/envs/HTT_hmmer

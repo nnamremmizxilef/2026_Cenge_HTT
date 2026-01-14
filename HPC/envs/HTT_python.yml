@@ -9,4 +9,4 @@ dependencies:
   - leidenalg
   - pandas
   - mummer4
-prefix: /home/zimmermf/miniconda3/envs/HTT_python
+prefix: /path/to/conda/envs/HTT_python

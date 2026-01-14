@@ -6,4 +6,4 @@ channels:
 dependencies:
   - blast
   - zstd
-prefix: /home/zimmermf/miniconda3/envs/HTT_blast
+prefix: /path/to/conda/envs/HTT_blast

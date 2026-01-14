@@ -5,4 +5,4 @@ channels:
   - defaults
 dependencies:
   - leidenalg
-prefix: /home/zimmermf/miniconda3/envs/HTT_leidenalg
+prefix: /path/to/conda/envs/HTT_leidenalg

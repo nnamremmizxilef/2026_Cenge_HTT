@@ -441,4 +441,4 @@ dependencies:
   - bioconda/noarch::bioconductor-bsgenome==1.74.0=r44hdfd78af_0
   - bioconda/noarch::bioconductor-plyranges==1.26.0=r44hdfd78af_0
   - bioconda/linux-64::earlgrey==6.3.4=h9948957_0
-prefix: /home/zimmermf/miniconda3/envs/HTT_earlgrey
+prefix: /path/to/conda/envs/HTT_earlgrey
