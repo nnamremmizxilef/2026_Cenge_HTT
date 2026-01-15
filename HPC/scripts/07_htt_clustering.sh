@@ -354,6 +354,17 @@ missing = required_cols - set(htt.columns)
 if missing:
     raise SystemExit(f"ERROR: HTT table missing columns: {missing}")
 
+# remove pairs where both strains belong to the same collapsed node
+htt["qclade"] = htt["qclade"].astype(str)
+htt["sclade"] = htt["sclade"].astype(str)
+n_before = len(htt)
+collapsed_mask = htt["qclade"].str.startswith("collapsed_node_")
+same_clade_mask = htt["qclade"] == htt["sclade"]
+htt = htt[~(collapsed_mask & same_clade_mask)].copy()
+n_filtered = n_before - len(htt)
+print(f"Filtered {n_filtered} within-collapsed-node pairs")
+print(f"Remaining HTT candidates: {len(htt)}")
+
 # load between-TE identity from filtered chained hits
 print(f"Loading filtered chained hits from: {chained_file}")
 ch = pd.read_csv(chained_file, sep="\t")
