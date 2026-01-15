@@ -118,7 +118,7 @@ Scripts are intended for submission to a job scheduler (e.g. SLURM). Scheduler d
 ### Clone the repository locally
 
 ```bash
-git clone https://github.com/USERNAME/2026_Cenge_HTT.git
+git clone https://github.com/nnamremmizxilef/2026_Cenge_HTT.git
 cd 2026_Cenge_HTT/R
 ```
 
