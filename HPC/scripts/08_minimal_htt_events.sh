@@ -124,7 +124,18 @@ if missing:
 
 df["qseqid"] = df["qseqid"].astype(str)
 df["sseqid"] = df["sseqid"].astype(str)
+df["qclade"] = df["qclade"].astype(str)
+df["sclade"] = df["sclade"].astype(str)
 df["community_id"] = df["community_id"].astype(str)
+
+# remove pairs where both strains belong to the same collapsed node
+n_before = len(df)
+collapsed_mask = df["qclade"].str.startswith("collapsed_node_")
+same_clade_mask = df["qclade"] == df["sclade"]
+df = df[~(collapsed_mask & same_clade_mask)].copy()
+n_filtered = n_before - len(df)
+print(f"Filtered {n_filtered} within-collapsed-node pairs")
+print(f"Remaining HTT pairs: {len(df)}")
 
 # build TE -> communities index
 te_to_comms = {}
@@ -284,8 +295,7 @@ df["qclade"] = df["qclade"].astype(str)
 df["sclade"] = df["sclade"].astype(str)
 df["community_id"] = df["community_id"].astype(str)
 
-# --- Filter within-collapsed-node pairs ---------------------------------------
-# Remove pairs where both strains belong to the same collapsed node
+# remove pairs where both strains belong to the same collapsed node
 n_before = len(df)
 collapsed_mask = df["qclade"].str.startswith("collapsed_node_")
 same_clade_mask = df["qclade"] == df["sclade"]
@@ -293,7 +303,6 @@ df = df[~(collapsed_mask & same_clade_mask)].copy()
 n_filtered = n_before - len(df)
 print(f"Filtered {n_filtered} within-collapsed-node pairs")
 print(f"Remaining HTT pairs: {len(df)}")
-# ------------------------------------------------------------------------------
 
 # add component assignment
 mp = pd.read_csv(map_file, sep="\t")
