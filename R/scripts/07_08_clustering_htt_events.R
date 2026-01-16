@@ -10,6 +10,7 @@ library(tidyr)
 library(ape)
 library(ggtree)
 library(ggpubr)
+library(jsonlite)
 
 # --- Paths --------------------------------------------------------------------
 data_dir    <- "data/07_08_clustering_htt_events"
@@ -40,6 +41,9 @@ cluster_summary <- read.delim(
   stringsAsFactors = FALSE
 )
 
+# Load nodes_info.json to get correct node-to-leaves mapping
+nodes_info <- fromJSON(file.path(data_dir, "nodes_info.json"))
+
 cat("Loaded", nrow(htt_pairs), "HTT candidate pairs\n")
 cat("Communities:", length(unique(htt_pairs$community_id)), "\n")
 cat("Components:", nrow(events_by_component), "\n")
@@ -69,17 +73,53 @@ if (any(tree$edge.length[root_edges] == 0)) {
 tree$tip.label <- gsub("_1_AssemblyScaffolds.*", "", tree$tip.label)
 tree$node.label <- NULL
 
-# --- Map node names to tree nodes ---------------------------------------------
-n_tips <- length(tree$tip.label)
-n_nodes <- tree$Nnode
-internal_nodes <- (n_tips + 1):(n_tips + n_nodes)
+# --- Map node names to tree nodes using MRCA ----------------------------------
+# For each node in nodes_info, find the corresponding tree node by computing
+# the MRCA of its leaf set
+
+simplify_leaf_name <- function(leaf_name) {
+  # Remove _1_AssemblyScaffolds... suffix
+  simple <- gsub("_1_AssemblyScaffolds.*", "", leaf_name)
+  return(simple)
+}
 
 node_mapping <- data.frame(
-  tree_node = internal_nodes,
-  node_name = paste0("node_", seq_along(internal_nodes)),
+  node_name = character(),
+  tree_node = integer(),
   stringsAsFactors = FALSE
 )
 
+for (i in seq_len(nrow(nodes_info))) {
+  node_name <- nodes_info$node_name[i]
+  all_leaves <- nodes_info$all_leaves[[i]]
+  
+  # Simplify leaf names to match tree tip labels
+  simple_leaves <- sapply(all_leaves, simplify_leaf_name)
+  
+  # Find tip indices in tree
+  tip_indices <- match(simple_leaves, tree$tip.label)
+  tip_indices <- tip_indices[!is.na(tip_indices)]
+  
+  if (length(tip_indices) >= 2) {
+    # Find MRCA of these tips
+    tree_node <- getMRCA(tree, tip_indices)
+  } else if (length(tip_indices) == 1) {
+    tree_node <- tip_indices[1]
+  } else {
+    tree_node <- NA
+  }
+  
+  node_mapping <- rbind(node_mapping, data.frame(
+    node_name = node_name,
+    tree_node = tree_node,
+    stringsAsFactors = FALSE
+  ))
+}
+
+cat("\nNode mapping (nodes_info -> tree):\n")
+print(node_mapping)
+
+# Join with events data
 node_mapping <- node_mapping %>%
   left_join(events_by_node, by = c("node_name" = "node")) %>%
   mutate(min_events_total = ifelse(is.na(min_events_total), 0, min_events_total))
@@ -87,21 +127,22 @@ node_mapping <- node_mapping %>%
 # --- Prepare tree data --------------------------------------------------------
 tree_data <- fortify(tree)
 
-node_annot_df <- data.frame(
-  node = node_mapping$tree_node,
-  min_events = node_mapping$min_events_total,
-  node_name = node_mapping$node_name,
-  stringsAsFactors = FALSE
-)
+node_annot_df <- node_mapping %>%
+  filter(!is.na(tree_node)) %>%
+  select(tree_node, min_events_total, node_name) %>%
+  rename(node = tree_node, min_events = min_events_total)
 
 tree_data <- left_join(tree_data, node_annot_df, by = "node")
 
 internal_data <- tree_data %>% 
   filter(!isTip & !is.na(min_events) & min_events > 0)
 
+cat("\nNodes with HTT events:\n")
+print(internal_data %>% select(node, label, min_events, node_name))
+
 x_max <- max(tree_data$x)
 
-# Plot 1: Tree with HTT events at nodes
+# --- Plot 1: Tree with HTT events at nodes ------------------------------------
 p1 <- ggtree(tree, ladderize = TRUE) +
   geom_tiplab(size = 3, fontface = "italic") +
   geom_point(
@@ -163,5 +204,15 @@ write.table(events_by_component,
             file.path(results_dir, "events_by_component.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
 
+# --- Output -------------------------------------------------------------------
+cat("\n")
+cat("Plot saved to:", results_dir, "\n")
+cat("  - htt_events_tree.pdf/png\n")
+cat("\n")
+cat("Tables saved to:", results_dir, "\n")
+cat("  - events_by_node.tsv\n")
+cat("  - events_by_component.tsv\n")
+
 # --- Session info -------------------------------------------------------------
 sessionInfo()
+

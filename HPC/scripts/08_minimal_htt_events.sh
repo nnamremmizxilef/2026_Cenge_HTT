@@ -264,22 +264,56 @@ if HAS_ETE3:
 # load nodes_info
 nodes_info = json.loads(nodes_info_file.read_text())
 
-# build node_to_clades sets
+# build node_to_clades sets and node_to_samples sets
 node_to_clades = {}
+node_to_samples = {}
 node_size = {}
 for node in nodes_info:
     clades = set()
+    samples = set()
     for leaf in node["all_leaves"]:
         simple_leaf = leaf.split("_1_AssemblyScaffolds")[0]
         if simple_leaf.endswith("_1"):
             simple_leaf = simple_leaf[:-2]
+        samples.add(simple_leaf)
         clades.add(clade_map.get(simple_leaf, simple_leaf))
     node_to_clades[node["node_name"]] = clades
+    node_to_samples[node["node_name"]] = samples
     node_size[node["node_name"]] = len(clades)
 
+# Identify collapsed clades and their member samples
+collapsed_clades = {}
+for sample, clade in clade_map.items():
+    if clade.startswith("collapsed_node_"):
+        if clade not in collapsed_clades:
+            collapsed_clades[clade] = set()
+        collapsed_clades[clade].add(sample)
+
+print(f"Found {len(collapsed_clades)} collapsed clades:")
+for cc, samples in collapsed_clades.items():
+    print(f"  {cc}: {len(samples)} samples")
+
+# Identify nodes that are internal to collapsed clades
+# A node is internal to a collapsed clade if ALL its samples belong to that
+# collapsed clade AND it has fewer samples than the collapsed clade
+nodes_internal_to_collapsed = {}
+for node_name, node_samples in node_to_samples.items():
+    for cc_name, cc_samples in collapsed_clades.items():
+        # Check if this node's samples are a proper subset of the collapsed clade
+        if node_samples.issubset(cc_samples) and len(node_samples) < len(cc_samples):
+            nodes_internal_to_collapsed[node_name] = cc_name
+            break
+
+print(f"Found {len(nodes_internal_to_collapsed)} nodes internal to collapsed clades")
+for node, cc in nodes_internal_to_collapsed.items():
+    print(f"  {node} is internal to {cc}")
+
 def find_mrca_node(c1, c2):
-    """Find MRCA node containing both clades."""
-    candidates = [n for n, cs in node_to_clades.items() if c1 in cs and c2 in cs]
+    """Find MRCA node containing both clades, excluding internal collapsed nodes."""
+    candidates = [
+        n for n, cs in node_to_clades.items() 
+        if c1 in cs and c2 in cs and n not in nodes_internal_to_collapsed
+    ]
     if not candidates:
         return None
     return min(candidates, key=lambda n: node_size[n])
