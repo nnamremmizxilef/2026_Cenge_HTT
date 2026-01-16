@@ -4,9 +4,9 @@
 ROOT=/path/to/HTT
 TREE_RESULTS=${ROOT}/results/01_results_phylo_tree
 KS_RESULTS=${ROOT}/results/03_results_ks_divergence
-CLUST_RESULTS=${ROOT}/results/07_results_htt_clustering
-RESULTS=${ROOT}/results/08_results_minimal_htt_events
-LOGS=${ROOT}/logs/08_logs_minimal_htt_events
+CLUST_RESULTS=${ROOT}/results/08_results_htt_clustering
+RESULTS=${ROOT}/results/09_results_minimal_htt_events
+LOGS=${ROOT}/logs/09_logs_minimal_htt_events
 
 ### input files from previous pipeline steps
 TREE_FILE=${TREE_RESULTS}/phylogeny_rooted.treefile

@@ -1,5 +1,5 @@
 # ==============================================================================
-# 07_08_htt_clustering_events.R
+# 08_09_htt_clustering_events.R
 # HTT clustering and minimal events visualization for Cenococcum geophilum
 # ==============================================================================
 
@@ -13,9 +13,9 @@ library(ggpubr)
 library(jsonlite)
 
 # --- Paths --------------------------------------------------------------------
-data_dir    <- "data/07_08_clustering_htt_events"
+data_dir    <- "data/08_09_clustering_htt_events"
 tree_dir    <- "data/01_phylo_tree"
-results_dir <- "results/07_08_clustering_htt_events"
+results_dir <- "results/08_09_clustering_htt_events"
 dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 
 # --- Load data ----------------------------------------------------------------
@@ -74,13 +74,8 @@ tree$tip.label <- gsub("_1_AssemblyScaffolds.*", "", tree$tip.label)
 tree$node.label <- NULL
 
 # --- Map node names to tree nodes using MRCA ----------------------------------
-# For each node in nodes_info, find the corresponding tree node by computing
-# the MRCA of its leaf set
-
 simplify_leaf_name <- function(leaf_name) {
-  # Remove _1_AssemblyScaffolds... suffix
-  simple <- gsub("_1_AssemblyScaffolds.*", "", leaf_name)
-  return(simple)
+  gsub("_1_AssemblyScaffolds.*", "", leaf_name)
 }
 
 node_mapping <- data.frame(
@@ -93,15 +88,12 @@ for (i in seq_len(nrow(nodes_info))) {
   node_name <- nodes_info$node_name[i]
   all_leaves <- nodes_info$all_leaves[[i]]
   
-  # Simplify leaf names to match tree tip labels
   simple_leaves <- sapply(all_leaves, simplify_leaf_name)
   
-  # Find tip indices in tree
   tip_indices <- match(simple_leaves, tree$tip.label)
   tip_indices <- tip_indices[!is.na(tip_indices)]
   
   if (length(tip_indices) >= 2) {
-    # Find MRCA of these tips
     tree_node <- getMRCA(tree, tip_indices)
   } else if (length(tip_indices) == 1) {
     tree_node <- tip_indices[1]
@@ -119,7 +111,6 @@ for (i in seq_len(nrow(nodes_info))) {
 cat("\nNode mapping (nodes_info -> tree):\n")
 print(node_mapping)
 
-# Join with events data
 node_mapping <- node_mapping %>%
   left_join(events_by_node, by = c("node_name" = "node")) %>%
   mutate(min_events_total = ifelse(is.na(min_events_total), 0, min_events_total))
@@ -134,7 +125,7 @@ node_annot_df <- node_mapping %>%
 
 tree_data <- left_join(tree_data, node_annot_df, by = "node")
 
-internal_data <- tree_data %>% 
+internal_data <- tree_data %>%
   filter(!isTip & !is.na(min_events) & min_events > 0)
 
 cat("\nNodes with HTT events:\n")
@@ -190,8 +181,8 @@ print(events_by_node %>% arrange(desc(min_events_total)))
 
 cat("\n")
 cat("Top clade pairs by HTT candidates:\n")
-print(cluster_summary %>% 
-        arrange(desc(n_candidates)) %>% 
+print(cluster_summary %>%
+        arrange(desc(n_candidates)) %>%
         head(10) %>%
         select(cladeA, cladeB, n_candidates, n_clusters))
 
@@ -206,13 +197,13 @@ write.table(events_by_component,
 
 # --- Output -------------------------------------------------------------------
 cat("\n")
-cat("Plot saved to:", results_dir, "\n")
+cat("Plots saved to:", results_dir, "\n")
 cat("  - htt_events_tree.pdf/png\n")
 cat("\n")
 cat("Tables saved to:", results_dir, "\n")
 cat("  - events_by_node.tsv\n")
 cat("  - events_by_component.tsv\n")
+cat("  - htt_by_clade_pair_between_only_undirected.tsv\n")
 
 # --- Session info -------------------------------------------------------------
 sessionInfo()
-

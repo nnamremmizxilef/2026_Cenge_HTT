@@ -4,16 +4,14 @@
 ROOT=/path/to/HTT
 GENOMES_DIR=${ROOT}/data/reference_genomes
 HTT_RESULTS=${ROOT}/results/06_results_htt_candidates
-RESULTS=${ROOT}/results/09_results_flankid
-LOGS=${ROOT}/logs/09_logs_flankid
+RESULTS=${ROOT}/results/07_results_flankid
+LOGS=${ROOT}/logs/07_logs_flankid
 
 ### input files from previous pipeline steps
 IN_HTT=${HTT_RESULTS}/htt_candidates/htt_candidates.tsv
 IN_NON=${HTT_RESULTS}/htt_candidates/non_htt_pairs.tsv
 
 ### flanking region parameters
-# IMPORTANT:
-# These parameters control flanking region extraction and alignment.
 # FLANK: size of upstream/downstream flanking regions to extract (bp)
 FLANK=10000
 
@@ -676,6 +674,102 @@ conda deactivate
 
 
 ### ===========================================================================
+### STEP 5: Filter strict HTT candidates (TE identity >75%, flank synteny thresholds)
+### ===========================================================================
+echo ""
+echo "### STEP 5: Filtering strict HTT candidates ###"
+echo ""
+
+conda activate HTT_python
+echo "Running in environment: ${CONDA_DEFAULT_ENV}"
+
+export RESULTS IN_HTT
+
+python3 << 'EOF'
+import os
+from pathlib import Path
+import pandas as pd
+
+results_dir = Path(os.environ.get("RESULTS", ""))
+in_htt = os.environ.get("IN_HTT", "")
+
+infile = results_dir / "summary" / "flankid_results.tsv"
+outdir = results_dir / "summary"
+outdir.mkdir(parents=True, exist_ok=True)
+
+if not infile.exists():
+    raise SystemExit(f"ERROR: missing {infile}")
+
+# Load flankid results and original HTT candidates
+df_flank = pd.read_csv(infile, sep="\t")
+df_orig = pd.read_csv(in_htt, sep="\t")
+
+# Merge on qseqid+sseqid to get original pair_id and all columns
+# Keep original columns (no suffix), mark flankid duplicates for removal
+df = df_flank.merge(
+    df_orig,
+    on=["qseqid", "sseqid"],
+    how="left",
+    suffixes=("_flankid", "")
+)
+
+# Drop flankid-generated columns that duplicate originals
+cols_to_drop = [c for c in df.columns if c.endswith("_flankid")]
+df = df.drop(columns=cols_to_drop)
+
+print(f"Merged flankid results with original HTT candidates")
+print(f"  Flankid rows: {len(df_flank)}")
+print(f"  Merged rows:  {len(df)}")
+
+# Sequential filtering
+n_all = len(df_flank)
+df_htt = df[df["label"] == "HTT"].copy()
+n_htt = len(df_htt)
+
+df_htt["mean_pid"] = pd.to_numeric(df_htt["mean_pid"], errors="coerce")
+df_te = df_htt[df_htt["mean_pid"] > 75.0].copy()
+n_te = len(df_te)
+
+df_te["flank_synt_cov_mean"] = pd.to_numeric(df_te["flank_synt_cov_mean"], errors="coerce")
+eps = 1e-12
+
+df_flank_0 = df_te[df_te["flank_synt_cov_mean"].fillna(1.0) <= eps].copy()
+df_flank_1 = df_te[df_te["flank_synt_cov_mean"].fillna(1.0) <= 0.01].copy()
+df_flank_5 = df_te[df_te["flank_synt_cov_mean"].fillna(1.0) <= 0.05].copy()
+
+# Write filtered candidates (all columns preserved, original pair_id)
+df_flank_0.to_csv(outdir / "htt_candidates_flank_0pct_teid_gt75.tsv", sep="\t", index=False)
+df_flank_1.to_csv(outdir / "htt_candidates_flank_le1pct_teid_gt75.tsv", sep="\t", index=False)
+df_flank_5.to_csv(outdir / "htt_candidates_flank_le5pct_teid_gt75.tsv", sep="\t", index=False)
+
+# Build summary
+summary_rows = [
+    {"step": "all_pairs", "n_pairs": n_all, "filtered_out": 0},
+    {"step": "HTT_only", "n_pairs": n_htt, "filtered_out": n_all - n_htt},
+    {"step": "HTT_TE_identity_gt75", "n_pairs": n_te, "filtered_out": n_htt - n_te},
+    {"step": "HTT_TEid_gt75_flank_0pct", "n_pairs": len(df_flank_0), "filtered_out": n_te - len(df_flank_0)},
+    {"step": "HTT_TEid_gt75_flank_le1pct", "n_pairs": len(df_flank_1), "filtered_out": n_te - len(df_flank_1)},
+    {"step": "HTT_TEid_gt75_flank_le5pct", "n_pairs": len(df_flank_5), "filtered_out": n_te - len(df_flank_5)},
+]
+
+summary = pd.DataFrame(summary_rows)
+out_summary = outdir / "htt_candidate_filtering_summary.tsv"
+summary.to_csv(out_summary, sep="\t", index=False)
+
+print("\nFiltering summary:")
+print(summary.to_string(index=False))
+print(f"\nNote: flank thresholds are parallel filters from HTT_TE_identity_gt75")
+print(f"\nWrote: {out_summary}")
+EOF
+
+echo ""
+echo "STEP 5 complete."
+
+conda deactivate
+
+
+
+### ===========================================================================
 ### FINISH
 ### ===========================================================================
 END_TIME=$(date +%s)
@@ -687,9 +781,13 @@ echo "Total runtime: $((ELAPSED / 3600))h $(((ELAPSED % 3600) / 60))m $((ELAPSED
 echo "=========================================="
 echo ""
 echo "Output files:"
-echo "  Pair list:              ${RESULTS}/summary/flankid_pairlist.tsv"
-echo "  Pair metadata:          ${RESULTS}/summary/pair_meta.tsv"
-echo "  FlankID results:        ${RESULTS}/summary/flankid_results.tsv"
-echo "  Summary statistics:     ${RESULTS}/summary/summary_stats.tsv"
-echo "  Extracted sequences:    ${RESULTS}/seqs/"
+echo "  Pair list:                  ${RESULTS}/summary/flankid_pairlist.tsv"
+echo "  Pair metadata:              ${RESULTS}/summary/pair_meta.tsv"
+echo "  FlankID results:            ${RESULTS}/summary/flankid_results.tsv"
+echo "  Summary statistics:         ${RESULTS}/summary/summary_stats.tsv"
+echo "  Filtering summary:          ${RESULTS}/summary/htt_candidate_filtering_summary.tsv"
+echo "  Strict HTT (0% flank):      ${RESULTS}/summary/htt_candidates_flank_0pct_teid_gt75.tsv"
+echo "  Strict HTT (≤1% flank):     ${RESULTS}/summary/htt_candidates_flank_le1pct_teid_gt75.tsv"
+echo "  Strict HTT (≤5% flank):     ${RESULTS}/summary/htt_candidates_flank_le5pct_teid_gt75.tsv"
+echo "  Extracted sequences:        ${RESULTS}/seqs/"
 echo ""

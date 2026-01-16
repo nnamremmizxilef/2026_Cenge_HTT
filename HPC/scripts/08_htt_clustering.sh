@@ -4,18 +4,22 @@
 ROOT=/path/to/HTT
 TE_CLASS_RESULTS=${ROOT}/results/05_results_te_classification
 HTT_RESULTS=${ROOT}/results/06_results_htt_candidates
-RESULTS=${ROOT}/results/07_results_htt_clustering
-LOGS=${ROOT}/logs/07_logs_htt_clustering
+HTT_FILTERED=${ROOT}/results/07_results_flankid
+RESULTS=${ROOT}/results/08_results_htt_clustering
+LOGS=${ROOT}/logs/08_logs_htt_clustering
 
 ### input files from previous pipeline steps
-HTT_FILE=${HTT_RESULTS}/htt_candidates/htt_candidates.tsv
+# Strict HTT candidates filtered by flankid (TE identity >75%, flank synteny = 0%)
+HTT_STRICT=${HTT_FILTERED}/summary/htt_candidates_flank_0pct_teid_gt75.tsv
+# Original HTT table (contains clade/mrca metadata needed for clustering)
+HTT_ORIG=${HTT_RESULTS}/htt_candidates/htt_candidates.tsv
 CHAINED_HITS=${HTT_RESULTS}/chained_hits/chained_hits.tsv
 TE_FASTA=${TE_CLASS_RESULTS}/all_tes_combined.fasta
 TE_INFO=${TE_CLASS_RESULTS}/all_tes_info.tsv
 
 ### user-provided input
 # IMPORTANT:
-# Users MUST provide a clade assignment file mapping genomes to clades. The clade assigment file is generated using the local R scripts.
+# Users MUST provide a clade assignment file mapping genomes to clades.
 # This should be the same file used in 06_htt_candidates.sh.
 CLADE_ASSIGN=${ROOT}/data/clade_assignment.tsv
 
@@ -29,6 +33,10 @@ MIN_LEN=300
 # Communities with inter-community edge density > MERGE_DENSITY are merged
 MERGE_DENSITY=0.05
 
+### filtered files (intermediate)
+CHAINED_FILTERED="${RESULTS}/tmp/chained_hits_filtered.tsv"
+HTT_TE_IDS="${RESULTS}/tmp/htt_te_ids.txt"
+
 
 
 ### create results/log folder(s)
@@ -38,7 +46,7 @@ mkdir -p "${LOGS}"
 
 
 ### setup logging
-JOBTAG="${SLURM_JOB_ID}_htt_clustering"
+JOBTAG="${SLURM_JOB_ID:-local}_htt_clustering"
 LOGFILE="${LOGS}/${JOBTAG}.log"
 exec > >(tee "${LOGFILE}") 2>&1
 
@@ -67,6 +75,11 @@ START_TIME=$(date +%s)
 echo "Date: $(date)"
 echo "Results directory: ${RESULTS}"
 echo ""
+echo "Input files:"
+echo "  Strict HTT candidates: ${HTT_STRICT}"
+echo "  Original HTT table:    ${HTT_ORIG}"
+echo "  Chained hits:          ${CHAINED_HITS}"
+echo ""
 echo "Within-clade BLAST parameters:"
 echo "  Database size: ${BLAST_DBSIZE}"
 echo "  E-value: ${BLAST_EVALUE}"
@@ -79,29 +92,31 @@ echo "  Merge density threshold: ${MERGE_DENSITY}"
 
 
 ### sanity checks
-for f in "${HTT_FILE}" "${CHAINED_HITS}" "${TE_FASTA}" "${TE_INFO}" "${CLADE_ASSIGN}"; do
+for f in "${HTT_STRICT}" "${HTT_ORIG}" "${CHAINED_HITS}" "${TE_FASTA}" "${TE_INFO}" "${CLADE_ASSIGN}"; do
     if [ ! -f "$f" ]; then
         echo "ERROR: Required file not found: $f"
         case "$f" in
             *05_results*) echo "Run 05_te_classification.sh first" ;;
             *06_results*) echo "Run 06_htt_candidates.sh first" ;;
+            *07_results*) echo "Run 07_flankid.sh first" ;;
             *clade_assignment*) echo "Please provide a clade assignment file" ;;
         esac
         exit 1
     fi
 done
 
-HTT_COUNT=$(tail -n +2 "${HTT_FILE}" | wc -l)
-if [ "${HTT_COUNT}" -eq 0 ]; then
-    echo "ERROR: No HTT candidates found in ${HTT_FILE}"
+HTT_STRICT_COUNT=$(tail -n +2 "${HTT_STRICT}" | wc -l)
+HTT_ORIG_COUNT=$(tail -n +2 "${HTT_ORIG}" | wc -l)
+if [ "${HTT_STRICT_COUNT}" -eq 0 ]; then
+    echo "ERROR: No strict HTT candidates found in ${HTT_STRICT}"
     exit 1
 fi
-echo "Found ${HTT_COUNT} HTT candidates"
+echo "Found ${HTT_STRICT_COUNT} strict HTT candidates (from ${HTT_ORIG_COUNT} original)"
 
 
 
 ### ===========================================================================
-### STEP 1: Prepare per-clade TE FASTAs (HTT-only TEs)
+### STEP 1: Prepare per-clade TE FASTAs (strict HTT-only TEs)
 ### ===========================================================================
 echo ""
 echo "### STEP 1: Preparing per-clade TE FASTAs ###"
@@ -113,7 +128,7 @@ conda activate HTT_python
 echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 echo "Python version: $(python --version)"
 
-export RESULTS HTT_FILE TE_INFO CLADE_ASSIGN TE_FASTA
+export RESULTS HTT_STRICT TE_INFO CLADE_ASSIGN TE_FASTA
 
 python3 << 'EOF'
 import os
@@ -122,7 +137,7 @@ from pathlib import Path
 from collections import defaultdict
 
 results_dir = Path(os.environ.get('RESULTS', ''))
-htt_file = Path(os.environ.get('HTT_FILE', ''))
+htt_file = Path(os.environ.get('HTT_STRICT', ''))
 te_info_file = Path(os.environ.get('TE_INFO', ''))
 clade_file = Path(os.environ.get('CLADE_ASSIGN', ''))
 te_fasta = Path(os.environ.get('TE_FASTA', ''))
@@ -132,7 +147,7 @@ out_fasta_dir.mkdir(parents=True, exist_ok=True)
 
 htt = pd.read_csv(htt_file, sep="\t")
 if htt.empty:
-    raise SystemExit("No HTT candidates found; nothing to cluster.")
+    raise SystemExit("No strict HTT candidates found; nothing to cluster.")
 
 # TE -> genome
 te_info = pd.read_csv(te_info_file, sep="\t")
@@ -145,7 +160,7 @@ sample_col = cols.get("sample", cl.columns[0])
 clade_col  = cols.get("clade",  cl.columns[1])
 genome_to_clade = dict(zip(cl[sample_col], cl[clade_col]))
 
-# gather all TE ids in HTT list
+# gather all TE ids in strict HTT list
 te_ids = set(htt["qseqid"]).union(set(htt["sseqid"]))
 
 # clade -> set(te_ids)
@@ -159,8 +174,8 @@ for te in te_ids:
     c = genome_to_clade.get(g, g)
     clade_tes[c].add(te)
 
-print(f"Unique HTT-involved TEs: {len(te_ids)}")
-print(f"Clades with HTT-involved TEs: {len(clade_tes)}")
+print(f"Unique strict-HTT-involved TEs: {len(te_ids)}")
+print(f"Clades with strict-HTT-involved TEs: {len(clade_tes)}")
 if unknown:
     print(f"WARNING: {unknown} TE ids not found in TE_INFO (will be ignored).")
 
@@ -270,7 +285,7 @@ for fa in "${FASTA_DIR}"/*.fasta; do
         -dbsize ${BLAST_DBSIZE} \
         -evalue ${BLAST_EVALUE} \
         -max_target_seqs ${BLAST_MAX_TARGETS} \
-        -num_threads "${SLURM_CPUS_PER_TASK}" \
+        -num_threads "${SLURM_CPUS_PER_TASK:-8}" \
         -outfmt "6 qseqid sseqid pident length qstart qend sstart send qlen slen bitscore evalue"
 done
 
@@ -282,27 +297,47 @@ conda deactivate
 
 
 ### ===========================================================================
-### STEP 3: Filter chained hits to HTT pairs only
+### STEP 3: Filter chained hits to strict HTT pairs only
 ### ===========================================================================
 echo ""
-echo "### STEP 3: Filtering chained hits to HTT pairs ###"
+echo "### STEP 3: Filtering chained hits to strict HTT pairs ###"
 echo ""
-
-CHAINED_FILTERED="${RESULTS}/tmp/chained_hits_filtered.tsv"
 
 if [ -f "${CHAINED_FILTERED}" ]; then
     echo "Filtered chained_hits already exists, skipping..."
 else
-    # extract unique TE IDs from HTT candidates
-    cut -f2,3 "${HTT_FILE}" | tail -n+2 | tr '\t' '\n' | sort -u > "${RESULTS}/tmp/htt_te_ids.txt"
+    export HTT_STRICT HTT_TE_IDS
     
-    n_te_ids=$(wc -l < "${RESULTS}/tmp/htt_te_ids.txt")
-    echo "Unique HTT TE IDs: ${n_te_ids}"
+    python3 << 'EOF'
+import os
+import csv
+from pathlib import Path
+
+htt_file = Path(os.environ["HTT_STRICT"])
+out = Path(os.environ["HTT_TE_IDS"])
+out.parent.mkdir(parents=True, exist_ok=True)
+
+ids = set()
+with htt_file.open() as f:
+    r = csv.DictReader(f, delimiter="\t")
+    for row in r:
+        ids.add(row["qseqid"])
+        ids.add(row["sseqid"])
+
+with out.open("w") as fo:
+    for x in sorted(ids):
+        fo.write(x + "\n")
+
+print(f"Wrote {len(ids)} TE IDs to {out}")
+EOF
     
-    # filter chained_hits to only rows where both qseqid and sseqid are in HTT TEs
+    n_te_ids=$(wc -l < "${HTT_TE_IDS}")
+    echo "Unique strict-HTT TE IDs: ${n_te_ids}"
+    
+    # filter chained_hits to only rows where both qseqid and sseqid are in strict HTT TEs
     echo "Filtering chained_hits..."
     awk -F'\t' 'NR==FNR {ids[$1]; next} FNR==1 || ($1 in ids && $2 in ids)' \
-        "${RESULTS}/tmp/htt_te_ids.txt" \
+        "${HTT_TE_IDS}" \
         "${CHAINED_HITS}" > "${CHAINED_FILTERED}"
     
     echo "Filtered chained hits: $(wc -l < "${CHAINED_FILTERED}") rows"
@@ -326,7 +361,7 @@ echo "Running in environment: ${CONDA_DEFAULT_ENV}"
 echo "Python version: $(python --version)"
 echo "igraph version: $(python -c 'import igraph; print(igraph.__version__)')"
 
-export RESULTS HTT_FILE MERGE_DENSITY MIN_LEN CHAINED_FILTERED
+export RESULTS HTT_STRICT HTT_ORIG MERGE_DENSITY MIN_LEN CHAINED_FILTERED
 
 python3 << 'EOF'
 import os
@@ -338,21 +373,40 @@ import math
 merge_density = float(os.environ.get('MERGE_DENSITY', '0.05'))
 min_len = int(os.environ.get('MIN_LEN', '300'))
 results_dir = Path(os.environ.get('RESULTS', ''))
-htt_file = Path(os.environ.get('HTT_FILE', ''))
+htt_strict_file = Path(os.environ.get('HTT_STRICT', ''))
+htt_orig_file = Path(os.environ.get('HTT_ORIG', ''))
 chained_file = Path(os.environ.get('CHAINED_FILTERED', ''))
 within_dir = results_dir / "within_clade/blast"
 
 import igraph as ig
 
-# load HTTs
-htt = pd.read_csv(htt_file, sep="\t")
-if htt.empty:
-    raise SystemExit("No HTT candidates; nothing to cluster.")
+# load strict HTT IDs
+strict = pd.read_csv(htt_strict_file, sep="\t")
+if strict.empty:
+    raise SystemExit("No strict HTT candidates; nothing to cluster.")
+if "pair_id" not in strict.columns:
+    raise SystemExit("ERROR: strict HTT file missing column: pair_id")
+strict_ids = set(strict["pair_id"].astype(str))
+
+# load original HTTs (with clades) and subset to strict set
+htt_all = pd.read_csv(htt_orig_file, sep="\t")
+if htt_all.empty:
+    raise SystemExit("No original HTT candidates; nothing to cluster.")
 
 required_cols = {"pair_id","qseqid","sseqid","qclade","sclade","mrca_node"}
-missing = required_cols - set(htt.columns)
+missing = required_cols - set(htt_all.columns)
 if missing:
-    raise SystemExit(f"ERROR: HTT table missing columns: {missing}")
+    raise SystemExit(f"ERROR: original HTT table missing columns: {missing}")
+
+htt_all["pair_id"] = htt_all["pair_id"].astype(str)
+htt = htt_all[htt_all["pair_id"].isin(strict_ids)].copy()
+
+print(f"Original HTT candidates: {len(htt_all)}")
+print(f"Strict pair_ids:         {len(strict_ids)}")
+print(f"Strict HTTs used:        {len(htt)}")
+
+if htt.empty:
+    raise SystemExit("After subsetting by strict IDs, no rows remain. Check pair_id consistency.")
 
 # remove pairs where both strains belong to the same collapsed node
 htt["qclade"] = htt["qclade"].astype(str)
@@ -363,7 +417,7 @@ same_clade_mask = htt["qclade"] == htt["sclade"]
 htt = htt[~(collapsed_mask & same_clade_mask)].copy()
 n_filtered = n_before - len(htt)
 print(f"Filtered {n_filtered} within-collapsed-node pairs")
-print(f"Remaining HTT candidates: {len(htt)}")
+print(f"Remaining strict HTT candidates: {len(htt)}")
 
 # load between-TE identity from filtered chained hits
 print(f"Loading filtered chained hits from: {chained_file}")
@@ -384,7 +438,7 @@ def get_between(row):
 htt["between_pident"] = htt.apply(get_between, axis=1)
 htt = htt[pd.notna(htt["between_pident"])].copy()
 
-print(f"HTT candidates with chained pident: {len(htt)}")
+print(f"Strict HTT candidates with chained pident: {len(htt)}")
 
 # load within-clade pident
 within = {}

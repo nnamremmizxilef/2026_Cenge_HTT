@@ -27,7 +27,7 @@ cat("Statistics table:\n")
 print(stats)
 
 # --- Fix zero-length root branch for aesthetics -------------------------------
-outgroup <- "PsefloM405_1_AssemblyScaffolds_2024-02-18"
+outgroup <- "PsefloM405_1_AssemblyScaffolds_2024-02-18"  # full name before simplification
 root_node <- length(tree$tip.label) + 1
 root_edges <- which(tree$edge[, 1] == root_node)
 
@@ -54,7 +54,7 @@ n_total <- n_tips + n_nodes
 
 edges    <- tree$edge
 edge_len <- tree$edge.length
-depth    <- node.depth.edgelength(tree)
+depth    <- node.depth.edgelength(tree)  # distance from root to each node
 
 # Root = node that never appears as a child
 root <- setdiff(edges[, 1], edges[, 2])[1]
@@ -97,7 +97,7 @@ cat("RED sanity check (tip range): ",
 red_table <- data.frame(
   node   = 1:n_total,
   label  = c(tree$tip.label,
-             rep(NA_character_, n_nodes)),
+             rep(NA_character_, n_nodes)),  # internal labels not used
   red    = red,
   is_tip = c(rep(1L, n_tips), rep(0L, n_nodes))
 )
@@ -139,8 +139,7 @@ tree_data <- left_join(tree_data, red_df, by = "node")
 
 x_max <- max(tree_data$x)
 
-# --- Plots --------------------------------------------------------------------
-# Plot 1: Basic tree with bootstrap support
+# --- Plot 1: Basic tree with bootstrap support --------------------------------
 p1 <- ggtree(tree, ladderize = TRUE) +
   geom_tiplab(size = 3, fontface = "italic") +
   geom_nodepoint(
@@ -168,7 +167,7 @@ ggsave(
   plot = p1, width = 8, height = 10, units = "in", dpi = 300
 )
 
-# Plot 2: Tree colored by genus
+# --- Plot 2: Tree colored by genus --------------------------------------------
 p2 <- ggtree(tree, ladderize = TRUE) %<+% tip_meta +
   geom_tiplab(aes(color = genus), size = 3, fontface = "italic") +
   geom_tippoint(aes(color = genus), size = 1.5) +
@@ -198,7 +197,8 @@ ggsave(
   plot = p2, width = 8, height = 10, units = "in", dpi = 300
 )
 
-# Plot 3: Tree with internal nodes colored & labeled by RED
+# --- Plot 3: Tree with internal nodes colored & labeled by RED ----------------
+# Use tree_data as the data source for node coordinates and RED values
 internal_data <- tree_data %>% filter(!isTip)
 
 p3 <- ggtree(tree, ladderize = TRUE) +
@@ -235,6 +235,14 @@ ggsave(
   file.path(results_dir, "phylo_tree_red_internal.png"),
   plot = p3, width = 8, height = 10, units = "in", dpi = 300
 )
+
+# --- Output summary -----------------------------------------------------------
+cat("\nPlots saved to:", results_dir, "\n")
+cat("  - phylo_tree_bootstrap.pdf/png\n")
+cat("  - phylo_tree_genus.pdf/png\n")
+cat("  - phylo_tree_red_internal.pdf/png\n")
+cat("RED values table written to:\n")
+cat("  -", file.path(results_dir, "red_values_from_R.tsv"), "\n\n")
 
 # --- Session info -------------------------------------------------------------
 sessionInfo()
