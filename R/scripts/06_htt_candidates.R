@@ -16,6 +16,7 @@ library(stringr)
 library(circlize)
 library(RColorBrewer)
 library(scales)
+library(tidyr)
 
 # --- Paths --------------------------------------------------------------------
 data_dir    <- "data/06_htt_candidates"
@@ -467,18 +468,36 @@ p1 <- ggplot(te_ks_valid, aes(x = ks, fill = is_htt)) +
 ggsave(file.path(results_dir, "htt_ks_distribution.pdf"), p1, width = 10, height = 6)
 ggsave(file.path(results_dir, "htt_ks_distribution.png"), p1, width = 10, height = 6, dpi = 300)
 
-# --- Plot 2: Ks density comparison --------------------------------------------
-p2 <- ggplot(te_ks_valid, aes(x = ks, fill = is_htt, color = is_htt)) +
-  geom_density(alpha = 0.4, linewidth = 0.8) +
+# --- Plot 2: Ks density comparison (with BUSCO) -------------------------------
+p2 <- ggplot() +
+  # Non-HTT TEs
+  geom_density(data = te_ks_valid %>% filter(is_htt == FALSE), 
+               aes(x = ks, fill = "Non-HTT", color = "Non-HTT"), 
+               alpha = 0.4, linewidth = 0.8) +
+  # HTT TEs
+  geom_density(data = te_ks_valid %>% filter(is_htt == TRUE), 
+               aes(x = ks, fill = "HTT candidate", color = "HTT candidate"), 
+               alpha = 0.4, linewidth = 0.8) +
+  # BUSCO genes
+  geom_density(data = busco_raw_valid, 
+               aes(x = ks, fill = "BUSCO genes", color = "BUSCO genes"), 
+               alpha = 0.4, linewidth = 0.8) +
+  # Median threshold line
+  geom_vline(xintercept = median(quantile_thresholds$q_0.5, na.rm = TRUE),
+             linetype = "dashed", color = "#264653", linewidth = 0.8) +
+  annotate("text", 
+           x = median(quantile_thresholds$q_0.5, na.rm = TRUE) * 0.6, 
+           y = 2.1, 
+           label = paste0("Median 0.5% threshold\n(Ks = ", 
+                          round(median(quantile_thresholds$q_0.5, na.rm = TRUE), 4), ")"),
+           size = 3, hjust = 1, color = "#264653") +
   scale_x_log10(labels = scales::scientific) +
   scale_fill_manual(
-    values = c("FALSE" = "#AAAAAA", "TRUE" = "#2A9D8F"),
-    labels = c("Non-HTT", "HTT candidate"),
+    values = c("Non-HTT" = "#AAAAAA", "HTT candidate" = "#2A9D8F", "BUSCO genes" = "#E76F51"),
     name = ""
   ) +
   scale_color_manual(
-    values = c("FALSE" = "#666666", "TRUE" = "#1D7A6E"),
-    labels = c("Non-HTT", "HTT candidate"),
+    values = c("Non-HTT" = "#666666", "HTT candidate" = "#1D7A6E", "BUSCO genes" = "#C45A3B"),
     name = ""
   ) +
   labs(
@@ -547,6 +566,178 @@ ggsave(file.path(results_dir, "htt_ks_density_by_class.png"),
 
 write.table(class_counts, file.path(results_dir, "htt_by_te_class.tsv"),
             sep = "\t", row.names = FALSE, quote = FALSE)
+
+# --- Plot 2c: Ks density faceted by node (3 representative nodes) -------------
+
+# Select 3 nodes spanning the divergence range
+node_selection <- quantile_thresholds %>%
+  arrange(q_0.5) %>%
+  mutate(rank = row_number(),
+         n_nodes = n()) %>%
+  filter(rank == 1 | 
+           rank == round(n_nodes * 0.5) | 
+           rank == n_nodes) %>%
+  pull(node)
+
+cat("Selected nodes for facet plot:", paste(node_selection, collapse = ", "), "\n")
+
+# Prepare TE data for selected nodes
+te_facet_data <- te_ks_valid %>%
+  filter(mrca_node %in% node_selection) %>%
+  mutate(
+    category = ifelse(is_htt, "HTT candidate", "Non-HTT"),
+    node_label = factor(mrca_node, levels = node_selection)
+  )
+
+# Prepare BUSCO data for selected nodes
+busco_facet_data <- busco_raw_valid %>%
+  filter(node %in% node_selection) %>%
+  mutate(
+    category = "BUSCO genes",
+    node_label = factor(node, levels = node_selection)
+  ) %>%
+  rename(mrca_node = node)
+
+# Get thresholds for selected nodes
+threshold_facet <- quantile_thresholds %>%
+  filter(node %in% node_selection) %>%
+  mutate(node_label = factor(node, levels = node_selection))
+
+# Combine data
+plot_data_facet <- bind_rows(
+  te_facet_data %>% select(ks, category, node_label),
+  busco_facet_data %>% select(ks, category, node_label)
+)
+
+# Create facet labels with threshold info
+facet_labels <- setNames(
+  paste0(threshold_facet$node, "\n(threshold = ", round(threshold_facet$q_0.5, 4), ")"),
+  as.character(threshold_facet$node_label)
+)
+
+p2c <- ggplot() +
+  # Density curves
+  geom_density(data = plot_data_facet, 
+               aes(x = ks, fill = category, color = category), 
+               alpha = 0.4, linewidth = 0.6) +
+  # Node-specific threshold lines
+  geom_vline(data = threshold_facet, 
+             aes(xintercept = q_0.5),
+             linetype = "dashed", color = "#264653", linewidth = 0.7) +
+  facet_wrap(~ node_label, nrow = 1, 
+             labeller = labeller(node_label = facet_labels)) +
+  scale_x_log10(labels = scales::scientific) +
+  scale_fill_manual(
+    values = c("Non-HTT" = "#AAAAAA", "HTT candidate" = "#2A9D8F", "BUSCO genes" = "#E76F51"),
+    name = ""
+  ) +
+  scale_color_manual(
+    values = c("Non-HTT" = "#666666", "HTT candidate" = "#1D7A6E", "BUSCO genes" = "#C45A3B"),
+    name = ""
+  ) +
+  labs(
+    x = "Ks (log scale)",
+    y = "Density"
+  ) +
+  theme_pubr() +
+  theme(
+    legend.position = "top",
+    axis.text = element_text(size = 8),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 9),
+    panel.grid.minor = element_blank()
+  )
+
+ggsave(file.path(results_dir, "htt_ks_density_faceted.pdf"), p2c, width = 11, height = 5)
+ggsave(file.path(results_dir, "htt_ks_density_faceted.png"), p2c, width = 11, height = 5, dpi = 300)
+
+# --- Plot 2d: Ks density faceted by ALL nodes (supplementary) -----------------
+
+# Order nodes by divergence (q_0.5 threshold)
+node_order <- quantile_thresholds %>%
+  arrange(q_0.5) %>%
+  pull(node)
+
+cat("Nodes ordered by divergence:", paste(node_order, collapse = ", "), "\n")
+
+# Prepare TE data for all nodes
+te_facet_all <- te_ks_valid %>%
+  filter(mrca_node %in% node_order) %>%
+  mutate(
+    category = ifelse(is_htt, "HTT candidate", "Non-HTT"),
+    node_label = factor(mrca_node, levels = node_order)
+  )
+
+# Prepare BUSCO data for all nodes
+busco_facet_all <- busco_raw_valid %>%
+  filter(node %in% node_order) %>%
+  mutate(
+    category = "BUSCO genes",
+    node_label = factor(node, levels = node_order)
+  ) %>%
+  rename(mrca_node = node)
+
+# Get thresholds for all nodes
+threshold_all <- quantile_thresholds %>%
+  filter(node %in% node_order) %>%
+  mutate(node_label = factor(node, levels = node_order))
+
+# Combine data
+plot_data_all <- bind_rows(
+  te_facet_all %>% select(ks, category, node_label),
+  busco_facet_all %>% select(ks, category, node_label)
+)
+
+# Create facet labels with threshold info
+facet_labels_all <- setNames(
+  paste0(threshold_all$node, " (", format(threshold_all$q_0.5, scientific = TRUE, digits = 2), ")"),
+  as.character(threshold_all$node_label)
+)
+
+# Determine grid dimensions
+n_nodes <- length(node_order)
+n_cols <- 5
+n_rows <- ceiling(n_nodes / n_cols)
+
+p2d <- ggplot() +
+  geom_density(data = plot_data_all, 
+               aes(x = ks, fill = category, color = category), 
+               alpha = 0.4, linewidth = 0.5) +
+  geom_vline(data = threshold_all, 
+             aes(xintercept = q_0.5),
+             linetype = "dashed", color = "#264653", linewidth = 0.5) +
+  facet_wrap(~ node_label, ncol = n_cols, 
+             labeller = labeller(node_label = facet_labels_all),
+             scales = "free_y") +
+  scale_x_log10(labels = scales::scientific) +
+  scale_fill_manual(
+    values = c("Non-HTT" = "#AAAAAA", "HTT candidate" = "#2A9D8F", "BUSCO genes" = "#E76F51"),
+    name = ""
+  ) +
+  scale_color_manual(
+    values = c("Non-HTT" = "#666666", "HTT candidate" = "#1D7A6E", "BUSCO genes" = "#C45A3B"),
+    name = ""
+  ) +
+  labs(
+    x = "Ks (log scale)",
+    y = "Density"
+  ) +
+  theme_pubr() +
+  theme(
+    legend.position = "top",
+    axis.text = element_text(size = 6),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 7),
+    panel.grid.minor = element_blank(),
+    panel.spacing = unit(0.3, "lines")
+  )
+
+ggsave(file.path(results_dir, "htt_ks_density_all_nodes.pdf"), p2d, 
+       width = 14, height = 3 * n_rows)
+ggsave(file.path(results_dir, "htt_ks_density_all_nodes.png"), p2d, 
+       width = 14, height = 3 * n_rows, dpi = 300)
+
+cat("Saved faceted plot with", n_nodes, "nodes (", n_cols, "x", n_rows, "grid)\n")
 
 # --- Plot 3: Ka vs Ks scatter -------------------------------------------------
 te_ks_scatter <- te_ks_valid %>% filter(is.finite(ka) & ka > 0 & ka < 10)

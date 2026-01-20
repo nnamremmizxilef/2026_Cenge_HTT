@@ -21,12 +21,12 @@ suppressPackageStartupMessages({
 # ------------------------------------------------------------------------------
 # Paths
 # ------------------------------------------------------------------------------
-data <- "data"
-out_dir  <- "results"
+data_dir <- "data/10_htt_mobilome_contribution/"
+out_dir  <- "results/10_htt_mobilome_contribution/"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Top-level data folder (for genome_sizes.tsv + clade_assignments.tsv)
-data_root <- "data"
+data_root <- "data/10_htt_mobilome_contribution/"
 
 # IMPORTANT: use strictly filtered HTT set
 htt_file <- file.path(data_dir, "htt_candidates_flank_0pct_teid_gt75.tsv")
@@ -193,20 +193,21 @@ cat("\nLoading genome sizes from genome_sizes.tsv...\n")
 genome_sizes_file <- file.path(data_root, "genome_sizes.tsv")
 stopifnot(file.exists(genome_sizes_file))
 
-genome_sizes <- read_tsv(genome_sizes_file, show_col_types = FALSE) %>%
-  rename(genome_size = any_of(c("genome_bp", "genome_size"))) %>%
-  select(genome, genome_size) %>%
-  distinct() %>%
+genome_sizes <- read_tsv(genome_sizes_file, show_col_types = FALSE)
+
+# sanity check: confirm expected columns
+if (!all(c("genome", "genome_bp") %in% colnames(genome_sizes))) {
+  stop(
+    "genome_sizes.tsv columns are: ",
+    paste(colnames(genome_sizes), collapse = ", ")
+  )
+}
+
+genome_sizes <- genome_sizes %>%
+  rename(genome_size = genome_bp) %>%
   filter(!genome %in% exclude_genomes)
 
-# sanity checks
-if (!all(c("genome", "genome_size") %in% colnames(genome_sizes))) {
-  stop("genome_sizes.tsv must contain columns: genome and genome_bp (or genome_size)")
-}
-if (any(is.na(genome_sizes$genome_size))) stop("Missing genome_size values in genome_sizes.tsv")
-if (any(genome_sizes$genome_size <= 0)) stop("Non-positive genome_size values in genome_sizes.tsv")
-
-cat("  Genome sizes loaded for", nrow(genome_sizes), "genomes (excluding outgroup + collapsed nodes)\n")
+cat("  Genome sizes loaded for", nrow(genome_sizes), "genomes\n")
 
 # ------------------------------------------------------------------------------
 # 5. Merge and calculate HTT contribution
